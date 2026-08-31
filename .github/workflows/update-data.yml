@@ -1,0 +1,58 @@
+name: Update Data & Deploy
+
+on:
+  schedule:
+    # 北京时间 16:30（UTC 08:30）每个交易日收盘后更新
+    - cron: "30 8 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r scripts/requirements.txt
+
+      # 10jqka 登录 cookie（仓库 Secrets → THS_COOKIE），用于每月成分股刷新绕过登录墙
+      - name: Fetch sectors (monthly refresh)
+        env:
+          THS_COOKIE: ${{ secrets.THS_COOKIE }}
+        run: python scripts/fetch_sectors.py
+
+      - name: Fetch history (incremental)
+        run: python scripts/fetch_history.py
+
+      - name: Commit updated data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/sectors.json docs/data/history.json docs/data/sectors.json
+          git diff --cached --quiet || git commit -m "chore(data): update sector history $(date +%F)"
+          git push origin HEAD
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

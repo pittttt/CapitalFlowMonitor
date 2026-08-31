@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>板块资金监控 · 排名走势</title>
+<style>
+  :root{
+    --bg:#f5f5f7;
+    --card:#ffffff;
+    --line:#e6e6ea;
+    --ink:#1d1d1f;
+    --sub:#86868b;
+    --sub2:#a1a1a6;
+    --up:#ff3b30;
+    --down:#34c759;
+    --blue:#0071e3;
+    --amber:#ff9f0a;
+    --shadow:0 1px 3px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05);
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue","PingFang SC","Microsoft YaHei",sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;line-height:1.5;padding:28px 22px 60px}
+  .wrap{max-width:1320px;margin:0 auto}
+
+  header{display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:14px;margin-bottom:22px}
+  .tt{display:flex;align-items:center;gap:12px}
+  .logo{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#0071e3,#42a5ff);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:17px;box-shadow:var(--shadow)}
+  h1{font-size:21px;font-weight:600;letter-spacing:.3px}
+  .sub{font-size:12.5px;color:var(--sub);margin-top:2px}
+  .meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .pill{font-size:11.5px;color:var(--sub);background:#fff;border:1px solid var(--line);padding:5px 11px;border-radius:999px;box-shadow:var(--shadow);font-family:var(--mono)}
+  .btn{font-family:var(--sans);font-size:12px;font-weight:600;color:var(--blue);background:#fff;border:1px solid var(--line);padding:6px 13px;border-radius:999px;cursor:pointer;box-shadow:var(--shadow);transition:background .15s,transform .1s}
+  .btn:hover{background:#f0f7ff}
+  .btn:active{transform:scale(.96)}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px 18px 16px;box-shadow:var(--shadow)}
+  .card-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+  .bar-i{width:4px;height:15px;border-radius:3px;background:var(--blue)}
+  .card-head h2{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px;margin-right:8px}
+
+  /* tabs */
+  .tabs{display:flex;gap:2px;background:#f0f0f3;border-radius:10px;padding:3px}
+  .tab{border:none;background:transparent;font-family:var(--sans);font-size:12.5px;font-weight:600;color:var(--sub);padding:5px 14px;border-radius:8px;cursor:pointer;transition:all .15s}
+  .tab.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+  .tab .hint{position:relative;display:inline-block;margin-left:3px;color:var(--sub2);cursor:help}
+  .tab .hint .tip{position:absolute;bottom:150%;left:50%;transform:translateX(-50%);background:rgba(29,29,31,.94);color:#fff;font-size:11px;font-weight:400;padding:8px 11px;border-radius:9px;width:260px;line-height:1.5;opacity:0;pointer-events:none;transition:opacity .12s;z-index:20;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+  .tab .hint:hover .tip{opacity:1}
+
+  /* topn */
+  .topn{display:flex;gap:6px;margin-left:auto;align-items:center}
+  .topn .lbl{font-size:11px;color:var(--sub2)}
+  .seg{display:flex;gap:2px;background:#f0f0f3;border-radius:8px;padding:2px}
+  .seg button{border:none;background:transparent;font-family:var(--sans);font-size:11.5px;font-weight:600;color:var(--sub);padding:4px 10px;border-radius:6px;cursor:pointer}
+  .seg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+
+  .backbtn{display:none;font-size:11.5px;color:var(--blue);background:#f0f7ff;border:1px solid #cfe5fb;padding:4px 11px;border-radius:999px;cursor:pointer;font-weight:600}
+  .backbtn.show{display:inline-block}
+
+  .badge{display:none;font-size:11.5px;color:#8a5a00;background:#fff6e5;border:1px solid #ffe0a3;padding:5px 12px;border-radius:999px;margin:0 0 10px;font-weight:600}
+  .badge.show{display:block;line-height:1.6}
+
+  #chart{width:100%;height:600px}
+  .hint{font-size:11px;color:var(--sub2);margin-top:8px;text-align:center}
+
+  footer{margin-top:26px;text-align:center;font-size:11px;color:var(--sub2);line-height:1.7}
+  footer b{color:var(--sub)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="tt">
+      <div class="logo">板</div>
+      <div>
+        <h1>板块资金监控</h1>
+        <div class="sub">同花顺行业板块排名走势 · 涨跌幅来自同花顺官方板块指数</div>
+      </div>
+    </div>
+    <div class="meta">
+      <span class="pill" id="lastUpd">数据加载中…</span>
+      <button class="btn" id="refreshBtn">↻ 拉取最新</button>
+    </div>
+  </header>
+
+  <div class="card">
+    <div class="card-head">
+      <h2><span class="bar-i"></span>板块历史维度 · 排名走势</h2>
+      <div class="tabs" id="tabs">
+        <button class="tab on" data-tab="chg">涨幅 (%)</button>
+        <button class="tab" data-tab="chg5">5日涨幅 (%)</button>
+        <button class="tab" data-tab="netinflow">主力净流入 (亿元)
+          <span class="hint">ⓘ<span class="tip">非严格同花顺口径：为腾讯自选股个股主力净流入（大单+超大单）按板块成分股求和，与同花顺页面"净额"聚合逻辑一致。</span></span>
+        </button>
+      </div>
+      <div class="topn">
+        <span class="lbl">显示</span>
+        <div class="seg" id="topn">
+          <button data-n="all">全部</button>
+          <button data-n="50">Top50</button>
+          <button data-n="20" class="on">Top20</button>
+          <button data-n="10">Top10</button>
+        </div>
+        <button class="backbtn" id="backBtn">← 返回全部板块</button>
+      </div>
+    </div>
+    <div class="badge" id="sectorBadge"></div>
+    <div id="chart"></div>
+    <div class="hint" id="hint">点击下方图例中的板块名，可查看该板块的排名曲线与具体数值；再次点击或点「返回全部板块」回到全视图 · 拖动底部滑块选择时间窗口</div>
+  </div>
+
+  <footer>
+    数据来源：<b>同花顺行业板块分类及板块指数（10jqka）</b> + <b>腾讯自选股行情（westock-data）</b>，每日收盘后由 GitHub Actions 自动更新。
+    <br>板块列表与成分股每月刷新；主力净流入为成分股聚合口径（见 tab ⓘ 说明）。本页面为静态站点，仅供参考，不构成投资建议 · 涨红跌绿遵循 A 股惯例
+  </footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<script>
+/* ============ 状态 ============ */
+let DATA = null;          // history.json
+let SECTORS = null;       // 站点内板块快照
+const state = { tab: "chg", mode: "all", topn: 20, singleName: null };
+const chart = echarts.init(document.getElementById("chart"));
+const TAB_UNIT = { chg: "%", chg5: "%", netinflow: "亿元" };
+const TAB_LABEL = { chg: "涨跌幅", chg5: "5日涨幅", netinflow: "主力净流入" };
+
+/* ============ 数据加载 ============ */
+async function loadAll() {
+  const [h, s] = await Promise.all([
+    fetch("data/history.json", { cache: "no-store" }).then(r => { if (!r.ok) throw new Error("history " + r.status); return r.json(); }),
+    fetch("data/sectors.json", { cache: "no-store" }).then(r => { if (!r.ok) throw new Error("sectors " + r.status); return r.json(); }),
+  ]);
+  DATA = h; SECTORS = s;
+  render();
+}
+document.getElementById("refreshBtn").addEventListener("click", loadAll);
+
+/* ============ 工具函数 ============ */
+const fmt = (v, d = 2) => v == null ? "-" : (v >= 0 ? "+" : "") + v.toFixed(d);
+const fmtAmt = v => v == null ? "-" : v.toFixed(2);
+const p2 = n => String(n).padStart(2, "0");
+function palette(i) {
+  const hue = (i * 137.508) % 360;   // 黄金角散列，相邻板块颜色差异大
+  return "hsl(" + hue.toFixed(1) + ", 62%, 50%)";
+}
+
+/* 排名：值越大名次越靠前；null 排最后；并列按板块顺序 */
+function calcRanks(tab) {
+  const series = DATA.series[tab];
+  const names = Object.keys(series);
+  const ranks = {};
+  for (const n of names) ranks[n] = new Array(DATA.dates.length).fill(null);
+  for (let di = 0; di < DATA.dates.length; di++) {
+    const idx = names.map((n, i) => ({ n, v: series[n][di], i }))
+                     .sort((a, b) => (a.v == null ? 1 : 0) - (b.v == null ? 1 : 0) || b.v - a.v || a.i - b.i);
+    idx.forEach((e, r) => { if (e.v != null) ranks[e.n][di] = r + 1; });
+  }
+  return ranks;
+}
+
+/* 最新交易日排名（降序取 TopN） */
+function latestOrder(tab) {
+  const series = DATA.series[tab];
+  return Object.keys(series)
+    .map(n => ({ n, v: series[n][DATA.dates.length - 1] }))
+    .sort((a, b) => (a.v == null ? 1 : 0) - (b.v == null ? 1 : 0) || b.v - a.v)
+    .map(e => e.n);
+}
+
+/* ============ 图表渲染 ============ */
+const ranks = {};   // tab -> 板块 -> 排名数组
+
+function allViewOption() {
+  const order = latestOrder(state.tab);
+  const showNames = state.topn === "all" ? order : order.slice(0, state.topn);
+  const series = DATA.series[state.tab];
+  const rankArr = ranks[state.tab];
+  const selected = {};
+  showNames.forEach((n, i) => selected[n] = true);
+
+  return {
+    animation: false,
+    grid: { top: 36, left: 54, right: 30, bottom: 96 },
+    legend: {
+      type: "scroll", bottom: 38, left: 20, right: 20,
+      data: showNames, selected,
+      icon: "roundRect", itemWidth: 14, itemHeight: 3,
+      textStyle: { fontSize: 11, color: "#3a3a3c" },
+    },
+    tooltip: {
+      trigger: "axis",
+      confine: true,
+      backgroundColor: "rgba(29,29,31,.94)", borderWidth: 0, textStyle: { color: "#fff", fontSize: 11.5 },
+      formatter: function (params) {
+        const di = params[0].dataIndex;
+        const rows = params
+          .map(p => ({ n: p.seriesName, r: p.value }))
+          .sort((a, b) => (a.r == null ? 1 : 0) - (b.r == null ? 1 : 0) || a.r - b.r)
+          .slice(0, 12);
+        let html = "<b>" + DATA.dates[di] + "</b>";
+        for (const r of rows) {
+          html += "<br><span style='display:inline-block;width:10px;height:10px;border-radius:2px;background:" +
+            paletteOrder(r.n) + ";margin-right:5px'></span>" + r.n +
+            " <span style='float:right;font-family:var(--mono);color:#ffd60a'>#" + (r.r == null ? "-" : r.r) + "</span>";
+        }
+        return html;
+      },
+    },
+    xAxis: { type: "category", data: DATA.dates, boundaryGap: false, axisLine: { lineStyle: { color: "#d2d2d7" } }, axisLabel: { fontSize: 10.5, color: "#86868b" } },
+    yAxis: {
+      type: "value", inverse: true, min: 1, max: 90, interval: 10,
+      name: "排名", nameTextStyle: { fontSize: 10.5, color: "#86868b" },
+      axisLabel: { fontSize: 10.5, color: "#86868b" }, splitLine: { lineStyle: { color: "#f0f0f3" } },
+    },
+    dataZoom: [
+      { type: "slider", bottom: 6, height: 20, borderColor: "#e6e6ea", backgroundColor: "#f7f7f9", fillerColor: "rgba(0,113,227,.12)", textStyle: { color: "#86868b", fontSize: 10 } },
+      { type: "inside" },
+    ],
+    series: showNames.map((n, i) => ({
+      name: n, type: "line", data: rankArr[n],
+      symbol: "none", lineStyle: { width: 1.3, color: palette(i) },
+      emphasis: { lineStyle: { width: 2.6 } },
+    })),
+  };
+}
+
+function singleViewOption(name) {
+  const series = DATA.series[state.tab];
+  const rankArr = ranks[state.tab];
+  const values = series[name];
+  const unit = TAB_UNIT[state.tab];
+  const isFlow = state.tab === "netinflow";
+  const fmtV = isFlow ? v => v == null ? "-" : v.toFixed(2) + "亿" : v => fmt(v) + "%";
+
+  return {
+    animation: false,
+    grid: { top: 36, left: 54, right: 66, bottom: 96 },
+    legend: { bottom: 38, left: 20, data: [name, name + " · 数值"], textStyle: { fontSize: 11, color: "#3a3a3c" } },
+    tooltip: {
+      trigger: "axis", confine: true,
+      backgroundColor: "rgba(29,29,31,.94)", borderWidth: 0, textStyle: { color: "#fff", fontSize: 11.5 },
+      formatter: function (params) {
+        const di = params[0].dataIndex;
+        let html = "<b>" + DATA.dates[di] + "</b><br>" + name +
+          "：排名 <span style='color:#ffd60a;font-family:var(--mono)'>#" + (rankArr[name][di] ?? "-") + "</span>" +
+          "　数值 <span style='font-family:var(--mono)'>" + fmtV(values[di]) + "</span>";
+        return html;
+      },
+    },
+    xAxis: { type: "category", data: DATA.dates, boundaryGap: true, axisLine: { lineStyle: { color: "#d2d2d7" } }, axisLabel: { fontSize: 10.5, color: "#86868b" } },
+    yAxis: [
+      { type: "value", inverse: true, min: 1, max: 90, interval: 10, name: "排名", nameTextStyle: { fontSize: 10.5, color: "#86868b" }, axisLabel: { fontSize: 10.5, color: "#86868b" }, splitLine: { lineStyle: { color: "#f0f0f3" } } },
+      { type: "value", name: unit, nameTextStyle: { fontSize: 10.5, color: "#86868b" }, axisLabel: { fontSize: 10.5, color: "#86868b" }, splitLine: { show: false } },
+    ],
+    dataZoom: [
+      { type: "slider", bottom: 6, height: 20, borderColor: "#e6e6ea", backgroundColor: "#f7f7f9", fillerColor: "rgba(0,113,227,.12)", textStyle: { color: "#86868b", fontSize: 10 } },
+      { type: "inside" },
+    ],
+    series: [
+      { name, type: "line", yAxisIndex: 0, data: rankArr[name], symbol: "none", lineStyle: { width: 2.2, color: "#0071e3" }, z: 3 },
+      {
+        name: name + " · 数值", type: "bar", yAxisIndex: 1, data: values,
+        barMaxWidth: 22,
+        itemStyle: { color: p => p.value >= 0 ? "#ff3b30" : "#34c759", opacity: 0.82, borderRadius: [3, 3, 0, 0] },
+        z: 2,
+      },
+    ],
+  };
+}
+
+/* 图例色板（与全视图线条一致：按最新排名序） */
+let paletteIndex = {};
+function paletteOrder(name) {
+  if (state.mode === "single") return "#0071e3";
+  const order = latestOrder(state.tab);
+  return palette(order.indexOf(name));
+}
+
+function render() {
+  if (!DATA) return;
+  for (const t of ["chg", "chg5", "netinflow"]) ranks[t] = calcRanks(t);
+
+  /* tab 按钮 */
+  document.querySelectorAll(".tab").forEach(b => b.classList.toggle("on", b.dataset.tab === state.tab));
+  /* topn 按钮 */
+  document.querySelectorAll("#topn button").forEach(b => b.classList.toggle("on", String(state.topn) === b.dataset.n));
+  document.getElementById("backBtn").classList.toggle("show", state.mode === "single");
+  document.querySelector(".topn .lbl").style.visibility = state.mode === "single" ? "hidden" : "visible";
+  document.querySelector("#topn").style.visibility = state.mode === "single" ? "hidden" : "visible";
+
+  /* 成分股状态徽标：已更新（与历史口径不一致）/ 超 30 天未更新 */
+  const badge = document.getElementById("sectorBadge");
+  const cur = SECTORS && SECTORS.fetched_at;
+  const his = DATA.meta && DATA.meta.sectors_fetched_at;
+  const curDate = cur ? new Date(cur.replace(" ", "T")) : null;
+  const stale = curDate && (Date.now() - curDate.getTime()) > 30 * 864e5;
+  if (cur && his && cur > his) {
+    badge.textContent = "⚠ 板块成分股已于 " + cur.slice(0, 10) + " 更新，历史数据基于更新前成分股";
+    badge.classList.add("show");
+  } else if (stale) {
+    badge.textContent = "⚠ 板块成分股已超过 30 天未更新（上次 " + cur.slice(0, 10) + "）。更新方法：GitHub 仓库 Settings → Secrets and variables → Actions → 新建 THS_COOKIE（浏览器登录 q.10jqka.com.cn 后 F12 复制 Cookie 头）→ Actions 手动运行 Update Data & Deploy；或本地运行 python scripts/fetch_sectors.py --force";
+    badge.classList.add("show");
+  } else {
+    badge.classList.remove("show");
+  }
+
+  /* 更新时间 */
+  document.getElementById("lastUpd").textContent =
+    "最后更新 " + DATA.meta.updated_at.slice(5, 16).replace(" ", " ") + " · 交易日 " + DATA.dates[0] + " ~ " + DATA.dates[DATA.dates.length - 1];
+
+  chart.setOption(state.mode === "single" ? singleViewOption(state.singleName) : allViewOption(), true);
+}
+
+/* ============ 交互 ============ */
+document.getElementById("tabs").addEventListener("click", e => {
+  const b = e.target.closest(".tab");
+  if (!b) return;
+  state.tab = b.dataset.tab;
+  render();
+});
+
+document.getElementById("topn").addEventListener("click", e => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  state.mode = "all"; state.singleName = null;
+  state.topn = b.dataset.n === "all" ? "all" : parseInt(b.dataset.n, 10);
+  render();
+});
+
+document.getElementById("backBtn").addEventListener("click", () => {
+  state.mode = "all"; state.singleName = null;
+  render();
+});
+
+/* 点击图例：全视图 → 进入该板块单视图；单板块视图 → 再点当前板块回全视图，点其他板块切换 */
+chart.on("legendselectchanged", function (params) {
+  if (params.name.indexOf(" · 数值") >= 0) return;   // 柱形图例不可交互
+  if (state.mode === "single") {
+    if (params.name === state.singleName) {
+      state.mode = "all"; state.singleName = null;
+    } else {
+      state.singleName = params.name;
+    }
+  } else {
+    state.mode = "single"; state.singleName = params.name;
+  }
+  render();
+});
+
+window.addEventListener("resize", () => chart.resize());
+loadAll().catch(err => {
+  document.getElementById("lastUpd").textContent = "数据加载失败：" + err.message;
+});
+</script>
+</body>
+</html>

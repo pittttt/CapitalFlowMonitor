@@ -1,0 +1,6 @@
+# 10jqka 登录 cookie（敏感凭证，不入库；GitHub Actions 用 Secrets.THS_COOKIE）
+.ths_cookie
+
+__pycache__/
+*.pyc
+.claude/
