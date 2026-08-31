@@ -8,11 +8,9 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 concurrency:
-  group: pages
+  group: data
   cancel-in-progress: false
 
 jobs:
@@ -37,6 +35,7 @@ jobs:
       - name: Fetch history (incremental)
         run: python scripts/fetch_history.py
 
+      # 数据提交后由 GitHub Pages（branch 模式，源 = main 分支 /docs 目录）自动部署
       - name: Commit updated data
         run: |
           git config user.name "github-actions[bot]"
@@ -44,15 +43,3 @@ jobs:
           git add data/sectors.json docs/data/history.json docs/data/sectors.json
           git diff --cached --quiet || git commit -m "chore(data): update sector history $(date +%F)"
           git push origin HEAD
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: docs
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
