@@ -3,22 +3,24 @@
 
 维度：
 - 涨幅 / 5日涨幅：同花顺官方板块指数（881xxx 加权指数）日K，与同花顺页面完全一致
-- 主力净流入：成分股当日主力净流入（腾讯 MainNetFlow）求和，单位亿元
+- 主力净流入：同花顺官方行业资金流页面（hyzjl）当日板块净额，每日累积，与同花顺页面完全一致
 
 更新策略：
 - 板块指数每次全量重拉（90 次请求，接口返回最近 140 个交易日）
-- 资金流默认增量（读 meta.last_date，只拉新交易日的个股资金流）；--full 全量重建
+- 官方净额每日追加（hyzjl 页面 2 次请求 + 涨跌幅交叉验证确认数据日期）
 
-用法：python scripts/fetch_history.py [--full] [--limit N] [--no-flow]
+用法：python scripts/fetch_history.py [--limit N] [--no-flow]
 """
 import argparse
 import datetime as dt
 import json
 import os
+import re
 import sys
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from westock_client import sector_kline, fund_flow_batch  # noqa: E402
+from westock_client import sector_kline, _ths_session  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SECTORS_FILE = os.path.join(ROOT, "data", "sectors.json")
@@ -26,15 +28,52 @@ HISTORY_FILE = os.path.join(ROOT, "docs", "data", "history.json")
 
 WINDOW_DAYS = 60        # 输出窗口（交易日）
 FETCH_DAYS = 65         # 拉取窗口（多取 5 天供 5 日涨幅计算）
-FLOW_LOOKBACK_DAYS = 95  # 全量时资金流回溯自然日（约 60+ 交易日）
+
+# 同花顺行业资金流页面（当日板块净额，单位亿元）
+THS_FLOW_URL = "https://data.10jqka.com.cn/funds/hyzjl/field/tradezdf/order/desc/page/{pg}/ajax/1/free/1/"
+THS_FLOW_REFERER = "https://data.10jqka.com.cn/funds/hyzjl/"
 
 
-def to_tencent_code(code6):
-    if code6.startswith(("60", "68")):
-        return "sh" + code6
-    if code6.startswith(("00", "30")):
-        return "sz" + code6
-    return "bj" + code6  # 北交所等
+def fetch_ths_sector_flow():
+    """抓同花顺行业资金流页面当日板块净额。
+
+    返回 {板块名: {"net": 净额(亿元), "chg": 涨跌幅(%)}}；失败返回 None。
+    hyzjl 页面数据为最新交易日；页面无日期字段，用涨跌幅列与板块指数交叉验证。
+    """
+    out = {}
+    sess = _ths_session(THS_FLOW_REFERER)
+    for pg in (1, 2):
+        r = None
+        for attempt in range(5):
+            try:
+                r = sess.get(THS_FLOW_URL.format(pg=pg), timeout=30)
+                if r.status_code in (401, 403):
+                    raise RuntimeError("http %s" % r.status_code)
+                r.raise_for_status()
+                r.encoding = "gbk"
+                break
+            except (Exception, OSError):  # noqa: BLE001
+                if attempt < 4:
+                    time.sleep(3 * (attempt + 1))
+                else:
+                    r = None
+        if r is None:
+            print("[warn] hyzjl 第 %d 页连续失败" % pg, flush=True)
+            continue
+        for row in re.findall(r"<tr[^>]*>(.*?)</tr>", r.text, re.S):
+            m = re.search(r"detail/code/(\d+)/[^>]*>([^<]+)<", row)
+            tds = re.findall(r"<td[^>]*>(.*?)</td>", row, re.S)
+            if not m or len(tds) < 7:
+                continue
+            name = m.group(2).strip()
+            clean = lambda s: re.sub(r"<[^>]+>", "", s).strip().replace(",", "")
+            try:
+                net = float(clean(tds[6]))
+                chg = float(clean(tds[3]).rstrip("%"))
+            except ValueError:
+                continue
+            out[name] = {"net": net, "chg": chg}
+    return out or None
 
 
 def load_json(path):
@@ -80,9 +119,8 @@ def compute_kline_series(closes_by_date, dates):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--full", action="store_true", help="资金流全量重建（60 日）")
     ap.add_argument("--limit", type=int, default=0, help="仅处理前 N 个板块（调试用）")
-    ap.add_argument("--no-flow", action="store_true", help="跳过资金流维度")
+    ap.add_argument("--no-flow", action="store_true", help="跳过官方净额抓取")
     args = ap.parse_args()
 
     sectors_data = load_json(SECTORS_FILE)
@@ -117,101 +155,66 @@ def main():
         series_chg[s["name"]] = chg
         series_chg5[s["name"]] = chg5
 
-    # ---------- 2. 主力净流入（成分股求和） ----------
+    # ---------- 2. 主力净流入（同花顺官方净额累积） ----------
     series_flow = {}
+    ths_last = old_meta.get("ths_last_date") or ""
+    new_day = dates[-1]
+    old_by_date = {}
+    for nm_old, arr in (old_series.get("netinflow") or {}).items():
+        old_by_date[nm_old] = dict(zip(old_dates, arr))
+    series_flow = {s["name"]: [old_by_date.get(s["name"], {}).get(d) for d in dates] for s in sectors}
+
     if not args.no_flow:
-        old_flow = old_series.get("netinflow") or {}
-        last_date = old_meta.get("last_date") or ""
-
-        if args.full or not old_dates or last_date not in old_dates or last_date not in dates:
-            # 历史缺失、或 last_date 已被 60 日窗口挤出（长期未更新）时全量重建
-            start = (dt.date.today() - dt.timedelta(days=FLOW_LOOKBACK_DAYS)).strftime("%Y-%m-%d")
-            print("资金流全量模式，起始 %s" % start)
-            new_dates = dates
+        if new_day == ths_last:
+            print("官方净额已更新至 %s，跳过" % new_day)
         else:
-            idx = old_dates.index(last_date)
-            new_dates = dates[idx + 1:]
-            start = last_date
-            print("资金流增量模式：已有 %s，新增 %d 个交易日" % (last_date, len(new_dates)))
-
-        if new_dates:
-            new_set = set(new_dates)
-            # 收集全部成分股（当前 sectors.json）
-            all_codes = sorted({c for s in sectors for c in s["constituents"]})
-            tencent_codes = [to_tencent_code(c) for c in all_codes]
-            print("拉取 %d 只成分股资金流（%s ~ %s）..." % (len(tencent_codes), start, dt.date.today()))
-            flows = fund_flow_batch(
-                tencent_codes, start, dt.date.today().strftime("%Y-%m-%d"),
-                workers=8,
-                progress=lambda d, t: print("资金流 %d/%d" % (d, t), flush=True),
-            )
-            # 数据新鲜度校验：腾讯资金流结算有延迟（实测收盘后约 1 小时仍为前日数据），
-            # 若返回的最新日期落后于板块指数最新交易日，本次跳过写入，次日增量会自动补齐
-            flow_dates = [rec["date"] for recs in flows.values() if recs for rec in recs]
-            latest_flow = max(flow_dates) if flow_dates else None
-            if latest_flow != new_dates[-1]:
+            print("抓取同花顺官方板块净额（%s）..." % new_day)
+            # 日级原子性：官方净额须覆盖绝大多数板块（>=80）才写入，避免混口径；
+            # 不足时等待重试（hyzjl 页面偶发不稳定/限流）
+            today = None
+            for rnd in range(3):
+                today = fetch_ths_sector_flow()
+                if today and len(today) >= 80:
+                    break
                 print(
-                    "[warn] 腾讯资金流最新日期 %s != 板块指数最新交易日 %s，数据未结算，本次跳过资金流更新（次日自动补齐）"
-                    % (latest_flow, new_dates[-1]),
+                    "[warn] 官方净额仅 %s 个板块（需要 >=80），等待 60s 重试（第 %d 轮）"
+                    % (len(today) if today else 0, rnd + 1),
                     flush=True,
                 )
-                new_dates = []
-            # code6 -> flows
-            code6_to_tencent = {c: to_tencent_code(c) for c in all_codes}
-            tencent_to_code6 = {v: k for k, v in code6_to_tencent.items()}
-
-            # 板块 -> 成分股 tencent code 列表 + 股票 -> 所属板块索引
-            sector_stocks = {}
-            stock_owners = {}
-            for s in sectors:
-                tc_list = [to_tencent_code(c) for c in s["constituents"]]
-                sector_stocks[s["name"]] = tc_list
-                for tc in tc_list:
-                    stock_owners.setdefault(tc, []).append(s["name"])
-
-            # 计算每个板块每个新交易日的净流入（元 -> 亿元）
-            day_flow_sum = {d: {} for d in new_dates}
-            for tc, recs in flows.items():
-                if not recs:
-                    continue
-                owners = stock_owners.get(tc)
-                if not owners:
-                    continue
-                for rec in recs:
-                    d = rec["date"]
-                    if d not in day_flow_sum:
-                        continue
-                    val = rec["main_net_flow"]
-                    for nm in owners:
-                        day_flow_sum[d][nm] = day_flow_sum[d].get(nm, 0.0) + val
-
-            # 序列按日期对齐：历史旧值（旧成分股口径）按日期映射，新日期用新成分股计算
-            # 注意 60 日窗口滚动后旧序列与 dates 可能错位，不能按索引拼接
-            old_by_date = {}
-            for nm_old, arr in old_flow.items():
-                old_by_date[nm_old] = dict(zip(old_dates, arr))
-            for nm in [s["name"] for s in sectors]:
-                hist = old_by_date.get(nm, {})
-                series_flow[nm] = []
-                for d in dates:
-                    if d in new_set:
-                        v = day_flow_sum.get(d, {}).get(nm)
-                        series_flow[nm].append(None if v is None else round(v / 1e8, 4))
-                    else:
-                        series_flow[nm].append(hist.get(d))
-        else:
-            print("无新增交易日，资金流跳过")
-            series_flow = {s["name"]: old_flow.get(s["name"]) for s in sectors}
+                time.sleep(60)
+            if not today or len(today) < 80:
+                print("[warn] 官方净额抓取不完整，本次跳过写入（保留旧值）")
+            else:
+                # 交叉验证：hyzjl 涨跌幅列 vs 板块指数最新交易日涨幅，一致率高则确认数据同日
+                ok_cnt, total = 0, 0
+                idx = dates.index(new_day) if new_day in dates else -1
+                for nm, f in today.items():
+                    if idx < 0:
+                        break
+                    v = series_chg.get(nm, [None] * len(dates))[idx]
+                    if v is not None and f["chg"] is not None:
+                        total += 1
+                        if abs(v - f["chg"]) < 0.05:
+                            ok_cnt += 1
+                if total >= 30 and ok_cnt / total < 0.8:
+                    print("[warn] hyzjl 涨跌幅与板块指数不一致（%d/%d），可能日期错位，跳过官方净额写入" % (ok_cnt, total))
+                else:
+                    for nm in series_flow:
+                        if nm in today:
+                            series_flow[nm][-1] = today[nm]["net"]
+                    ths_last = new_day
+                    print("官方净额已写入 %d 个板块（交叉验证 %d/%d 通过）" % (len(today), ok_cnt, total))
 
     # ---------- 3. 写输出 ----------
     payload = {
         "meta": {
             "updated_at": dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "last_date": dates[-1],
+            "ths_last_date": ths_last,
             "sectors_fetched_at": sectors_data["fetched_at"],
             "trade_dates_count": len(dates),
-            "source": "板块指数:同花顺(10jqka) / 主力净流入:腾讯自选股(westock) 成分股求和",
-            "inflow_caliber": "非严格同花顺口径：腾讯自选股个股主力净流入(大单+超大单)按板块成分股求和",
+            "source": "板块指数:同花顺(10jqka) / 主力净流入:同花顺官方行业资金流(hyzjl)每日净额累积",
+            "inflow_caliber": "同花顺官方口径：行业资金流页面当日板块净额，每日累积；累积前为 null",
         },
         "dates": dates,
         "series": {
