@@ -141,7 +141,58 @@ async function loadAll() {
   DATA = h; SECTORS = s;
   render();
 }
-document.getElementById("refreshBtn").addEventListener("click", loadAll);
+/* ============ 拉取最新 ============ */
+/* 静态站点无法免认证触发 GitHub Actions；点击后判断数据新鲜度：
+   最新 → 提示已是最新；过期 → 引导打开 Actions 页面手动触发，并轮询远程数据自动刷新 */
+let pollTimer = null;
+const ACTIONS_URL = "https://github.com/pittttt/CapitalFlowMonitor/actions/workflows/update-data.yml";
+
+function isFresh() {
+  if (!DATA || !DATA.meta || !DATA.meta.updated_at) return false;
+  const upd = new Date(DATA.meta.updated_at.replace(" ", "T"));
+  return (Date.now() - upd.getTime()) < 30 * 3600e3;   // 最近 30 小时内更新过（覆盖周末）
+}
+
+async function pullLatest() {
+  const btn = document.getElementById("refreshBtn");
+  if (isFresh()) {
+    btn.textContent = "✓ 已是最新";
+    setTimeout(() => (btn.textContent = "↻ 拉取最新"), 2200);
+    return;
+  }
+  btn.textContent = "正在更新…";
+  const lastUpd = DATA.meta.updated_at;
+  if (!window.open(ACTIONS_URL, "_blank")) {
+    alert("请到 GitHub Actions 页面手动运行 Update Data & Deploy：\n" + ACTIONS_URL);
+  }
+  let tried = 0;
+  clearInterval(pollTimer);
+  pollTimer = setInterval(async () => {
+    tried++;
+    try {
+      const r = await fetch("data/history.json", { cache: "no-store" });
+      const d = await r.json();
+      if (d.meta.updated_at !== lastUpd) {
+        clearInterval(pollTimer);
+        DATA = d;
+        render();
+        btn.textContent = "✓ 已更新";
+        setTimeout(() => (btn.textContent = "↻ 拉取最新"), 2500);
+      } else if (tried > 40) {
+        clearInterval(pollTimer);
+        btn.textContent = "↻ 拉取最新";
+        alert("等待更新超时（10 分钟），请确认 Actions 已成功运行");
+      }
+    } catch (e) {
+      if (tried > 40) {
+        clearInterval(pollTimer);
+        btn.textContent = "↻ 拉取最新";
+      }
+    }
+  }, 15000);
+}
+
+document.getElementById("refreshBtn").addEventListener("click", pullLatest);
 
 /* ============ 工具函数 ============ */
 const fmt = (v, d = 2) => v == null ? "-" : (v >= 0 ? "+" : "") + v.toFixed(d);
