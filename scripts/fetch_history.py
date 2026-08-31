@@ -52,22 +52,25 @@ def fetch_sector_klines(sectors):
 
 
 def compute_kline_series(closes_by_date, dates):
-    """由收盘价序列计算涨幅(%)和5日涨幅(%)。"""
-    chg, chg5 = [], []
+    """由收盘价序列计算涨幅(%)、3日涨幅(%)和5日涨幅(%)。"""
+    chg, chg3, chg5 = [], [], []
     prev = None
     for i, d in enumerate(dates):
         c = closes_by_date.get(d)
         if c is None:
             chg.append(None)
+            chg3.append(None)
             chg5.append(None)
             continue
         chg.append(None if prev is None else round((c / prev - 1) * 100, 2))
         prev = c
     for i, d in enumerate(dates):
         c = closes_by_date.get(d)
+        c3 = closes_by_date.get(dates[i - 3]) if i >= 3 else None
         c5 = closes_by_date.get(dates[i - 5]) if i >= 5 else None
+        chg3.append(None if (c is None or c3 is None or c3 <= 0) else round((c / c3 - 1) * 100, 2))
         chg5.append(None if (c is None or c5 is None or c5 <= 0) else round((c / c5 - 1) * 100, 2))
-    return chg, chg5
+    return chg, chg3, chg5
 
 
 def main():
@@ -101,11 +104,13 @@ def main():
     print("交易日: %d 个 (%s ~ %s)" % (len(dates), dates[0], dates[-1]))
 
     series_chg = {}
+    series_chg3 = {}
     series_chg5 = {}
     for s in sectors:
         closes = klines.get(s["code"]) or {}
-        chg, chg5 = compute_kline_series(closes, dates)
+        chg, chg3, chg5 = compute_kline_series(closes, dates)
         series_chg[s["name"]] = chg
+        series_chg3[s["name"]] = chg3
         series_chg5[s["name"]] = chg5
 
     # ---------- 2. 主力净流入（腾讯 MainNetFlow 按同花顺成分股聚合，结算校验后写入） ----------
@@ -175,6 +180,7 @@ def main():
         "dates": dates,
         "series": {
             "chg": series_chg,
+            "chg3": series_chg3,
             "chg5": series_chg5,
             "netinflow": series_flow,
         },

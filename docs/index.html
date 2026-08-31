@@ -94,6 +94,7 @@
       <h2><span class="bar-i"></span>板块历史维度 · 排名走势</h2>
       <div class="tabs" id="tabs">
         <button class="tab on" data-tab="chg">涨幅 (%)</button>
+        <button class="tab" data-tab="chg3">3日涨幅 (%)</button>
         <button class="tab" data-tab="chg5">5日涨幅 (%)</button>
         <button class="tab" data-tab="netinflow">主力净流入 (亿元)
           <span class="hint">ⓘ<span class="tip">主力净流入为腾讯自选股个股主力净流入（大单+超大单）按同花顺板块成分股求和，与同花顺口径有差异</span></span>
@@ -130,8 +131,8 @@ let DATA = null;          // history.json
 let SECTORS = null;       // 站点内板块快照
 const state = { tab: "chg", mode: "all", topn: 20, singleName: null };
 const chart = echarts.init(document.getElementById("chart"));
-const TAB_UNIT = { chg: "%", chg5: "%", netinflow: "亿元" };
-const TAB_LABEL = { chg: "涨幅", chg5: "5日涨幅", netinflow: "主力净流入" };
+const TAB_UNIT = { chg: "%", chg3: "%", chg5: "%", netinflow: "亿元" };
+const TAB_LABEL = { chg: "涨幅", chg3: "3日涨幅", chg5: "5日涨幅", netinflow: "主力净流入" };
 
 /* ============ 数据加载 ============ */
 async function loadAll() {
@@ -344,7 +345,7 @@ function paletteOrder(name) {
 
 function render() {
   if (!DATA) return;
-  for (const t of ["chg", "chg5", "netinflow"]) ranks[t] = calcRanks(t);
+  for (const t of ["chg", "chg3", "chg5", "netinflow"]) ranks[t] = calcRanks(t);
 
   /* tab 按钮 */
   document.querySelectorAll(".tab").forEach(b => b.classList.toggle("on", b.dataset.tab === state.tab));
