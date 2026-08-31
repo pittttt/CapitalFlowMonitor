@@ -2,11 +2,10 @@ name: Update Data & Deploy
 
 on:
   schedule:
-    # 北京时间 16:40（UTC 08:40）收盘后更新
-    - cron: "40 8 * * *"
-    # 北京时间 08:10（UTC 00:10）开盘前二次运行：覆盖修正昨日官方净额
-    # （hyzjl 数据盘后数小时内有修正，此时仍显示昨日数据且已修正完毕）
-    - cron: "10 0 * * *"
+    # 北京时间 05:10 起每 30 分钟检查一次（05:10~08:40），数据已结算即写入，未结算等下次
+    # UTC 21:10~00:40 每 30 分钟 = 北京 05:10~08:40
+    - cron: "10,40 21-23 * * *"
+    - cron: "10,40 0 * * *"
   workflow_dispatch:
 
 permissions:
@@ -35,8 +34,16 @@ jobs:
           THS_COOKIE: ${{ secrets.THS_COOKIE }}
         run: python scripts/fetch_sectors.py
 
+      # exit 3 = 资金流未结算（预期场景，07:10 那次跳过资金流，08:10 重试补齐）
       - name: Fetch history (incremental)
-        run: python scripts/fetch_history.py
+        run: |
+          python scripts/fetch_history.py
+          code=$?
+          if [ $code -eq 3 ]; then
+            echo "资金流数据未结算，等待下一次定时运行补齐"
+            exit 0
+          fi
+          exit $code
 
       # 数据提交后由 GitHub Pages（branch 模式，源 = main 分支 /docs 目录）自动部署
       - name: Commit updated data

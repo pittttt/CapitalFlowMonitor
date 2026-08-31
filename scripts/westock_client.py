@@ -97,7 +97,11 @@ def fund_flow(code, start_date, end_date, fields=None):
         date = rec.get("EndDate") or item.get("date")
         flow = rec.get("MainNetFlow")
         if date and flow is not None:
-            out.append({"date": date, "main_net_flow": float(flow)})
+            rec_out = {"date": date, "main_net_flow": float(flow)}
+            close = rec.get("ClosePrice")
+            if close is not None:
+                rec_out["close"] = float(close)
+            out.append(rec_out)
     out.sort(key=lambda x: x["date"])
     return out
 
@@ -136,6 +140,144 @@ def sector_kline(code):
         })
     bars.sort(key=lambda x: x["date"])
     return {"name": name, "bars": bars}
+
+
+def kline(codes, start_date, end_date):
+    """查询日K线（含收盘价），腾讯网关 route=query_kline_data。
+
+    codes: 代码列表（如 ["sh600519", "sz000001"]）
+    返回: {code: [{"date": "YYYY-MM-DD", "close": float}, ...] 按日期升序}
+    """
+    timeout = 30
+
+    def call():
+        body = {
+            "token": WESTOCK_TOKEN,
+            "route": "query_kline_data",
+            "params": {
+                "codes": codes,
+                "ktype": "day",
+                "fqtype": "qfq",
+                "start_date": start_date,
+                "end_date": end_date,
+            },
+            "skill_name": "westock-data",
+            "skill_channel": "skillhub",
+        }
+        r = requests.post(WESTOCK_URL, json=body, timeout=timeout)
+        r.raise_for_status()
+        d = r.json()
+        if d.get("code") != 0:
+            raise RuntimeError("westock kline error: %s" % d.get("msg"))
+        return d.get("data", {})
+
+    data = _retry(call)
+    out = {}
+    for i, item in enumerate(data.get("array") or []):
+        # 腾讯返回的 array 项无 code 字段，按请求顺序对应
+        code = item.get("code") or (codes[i] if i < len(codes) else None)
+        bars = []
+        for k in item.get("kline_data") or []:
+            d = k.get("end_date")
+            c = k.get("close_price")
+            if d and c is not None:
+                bars.append({"date": d, "close": float(c)})
+        bars.sort(key=lambda x: x["date"])
+        out[code] = bars
+    return out
+
+
+def flow_settled(sample_codes, date):
+    """校验腾讯资金流数据是否已结算：资金流记录自带 ClosePrice，与 K 线收盘价对比。
+
+    资金流结算晚于行情（收盘即有K线，资金流需逐笔汇总），两者日期与价格一致则已结算。
+    sample_codes: 样本股代码（腾讯格式），date: 目标日期（YYYY-MM-DD）
+    返回 (settled: bool, detail: str)
+    """
+    try:
+        klines = kline(sample_codes, date, date)
+        ok, total = 0, 0
+        detail = []
+        for code in sample_codes:
+            bars = klines.get(code) or []
+            if not bars:
+                continue
+            kc = bars[-1]
+            flows = fund_flow(code, date, date, fields="MainNetFlow,ClosePrice")
+            if not flows:
+                continue
+            fc = flows[-1]
+            total += 1
+            match = kc["date"] == fc["date"] and abs(kc["close"] - fc["close"]) / kc["close"] < 0.005
+            if match:
+                ok += 1
+            detail.append("%s k线%s=%.2f 资金流%s=%.2f %s" % (
+                code, kc["date"], kc["close"], fc["date"], fc["close"], "一致" if match else "不一致"))
+        settled = total > 0 and ok / total >= 0.8
+        return settled, "; ".join(detail)
+    except Exception as e:  # noqa: BLE001
+        return False, "校验失败: %s" % e
+
+
+EM_HOSTS = [
+    "https://push2.eastmoney.com",
+    "https://push2delay.eastmoney.com",
+    "https://push2his.eastmoney.com",
+]
+EM_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    ),
+    "Referer": "https://data.eastmoney.com/",
+}
+
+
+def eastmoney_main_flow_all(progress=None):
+    """抓取全市场个股当日主力净流入（东财 clist 批量接口，f62 主力净流入）。
+
+    返回 {code6: 主力净流入(元)}；多镜像域名轮换规避限流。
+    """
+    out = {}
+    page = 1
+    host_idx = 0
+    while page <= 60:
+        params = {
+            "pn": page, "pz": 100, "po": 1, "np": 1, "fltt": 2, "invt": 2,
+            "fid": "f62", "fs": "m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23",
+            "fields": "f12,f14,f62",
+        }
+        got = None
+        for attempt in range(3):
+            host = EM_HOSTS[(host_idx + attempt) % len(EM_HOSTS)]
+            try:
+                r = requests.get(host + "/api/qt/clist/get", params=params, timeout=15, headers=EM_HEADERS)
+                d = r.json()
+                diff = (d.get("data") or {}).get("diff") or []
+                got = diff
+                host_idx = (host_idx + attempt) % len(EM_HOSTS) + 1
+                break
+            except Exception:  # noqa: BLE001
+                time.sleep(1.5 * (attempt + 1))
+        if got is None:
+            print("[warn] 东财资金流第 %d 页连续失败" % page, flush=True)
+            break
+        if not got:
+            break
+        for item in got:
+            v = item.get("f62")
+            if v is not None and item.get("f12"):
+                try:
+                    out[item["f12"]] = float(v)
+                except (TypeError, ValueError):
+                    continue
+        if len(got) < 100:
+            break
+        page += 1
+        if progress and page % 10 == 0:
+            progress(page)
+        time.sleep(0.6)
+    return out
 
 
 def fund_flow_batch(codes, start_date, end_date, workers=8, progress=None):
