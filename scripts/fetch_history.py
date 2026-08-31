@@ -145,6 +145,17 @@ def main():
                 workers=8,
                 progress=lambda d, t: print("资金流 %d/%d" % (d, t), flush=True),
             )
+            # 数据新鲜度校验：腾讯资金流结算有延迟（实测收盘后约 1 小时仍为前日数据），
+            # 若返回的最新日期落后于板块指数最新交易日，本次跳过写入，次日增量会自动补齐
+            flow_dates = [rec["date"] for recs in flows.values() if recs for rec in recs]
+            latest_flow = max(flow_dates) if flow_dates else None
+            if latest_flow != new_dates[-1]:
+                print(
+                    "[warn] 腾讯资金流最新日期 %s != 板块指数最新交易日 %s，数据未结算，本次跳过资金流更新（次日自动补齐）"
+                    % (latest_flow, new_dates[-1]),
+                    flush=True,
+                )
+                new_dates = []
             # code6 -> flows
             code6_to_tencent = {c: to_tencent_code(c) for c in all_codes}
             tencent_to_code6 = {v: k for k, v in code6_to_tencent.items()}
