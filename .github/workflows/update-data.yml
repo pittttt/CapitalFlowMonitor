@@ -2,8 +2,8 @@ name: Update Data & Deploy
 
 on:
   schedule:
-    # 北京时间 16:30（UTC 08:30）每个交易日收盘后更新
-    - cron: "30 8 * * *"
+    # 北京时间 16:40（UTC 08:40）每个交易日收盘后更新（避开整点高峰，降低调度延迟）
+    - cron: "40 8 * * *"
   workflow_dispatch:
 
 permissions:
