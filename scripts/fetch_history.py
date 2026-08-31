@@ -155,9 +155,11 @@ def main():
         series_chg[s["name"]] = chg
         series_chg5[s["name"]] = chg5
 
-    # ---------- 2. 主力净流入（同花顺官方净额累积） ----------
+    # ---------- 2. 主力净流入（同花顺官方净额累积，盘后修正覆盖） ----------
     series_flow = {}
     ths_last = old_meta.get("ths_last_date") or ""
+    # 目标 = 板块指数最新交易日（hyzjl 只显示最新交易日数据，无历史）；
+    # 盘后数小时内有修正，workflow 次日开盘前二次运行会覆盖当日值（hyzjl 此时仍显示昨日数据且已修正）
     new_day = dates[-1]
     old_by_date = {}
     for nm_old, arr in (old_series.get("netinflow") or {}).items():
@@ -166,44 +168,43 @@ def main():
 
     if not args.no_flow:
         if new_day == ths_last:
-            print("官方净额已更新至 %s，跳过" % new_day)
+            print("官方净额已有 %s 数据，本次为修正覆盖尝试" % new_day)
+        print("抓取同花顺官方板块净额（%s）..." % new_day)
+        # 日级原子性：官方净额须覆盖绝大多数板块（>=80）才写入，避免混口径；
+        # 不足时等待重试（hyzjl 页面偶发不稳定/限流）
+        today = None
+        for rnd in range(3):
+            today = fetch_ths_sector_flow()
+            if today and len(today) >= 80:
+                break
+            print(
+                "[warn] 官方净额仅 %s 个板块（需要 >=80），等待 60s 重试（第 %d 轮）"
+                % (len(today) if today else 0, rnd + 1),
+                flush=True,
+            )
+            time.sleep(60)
+        if not today or len(today) < 80:
+            print("[warn] 官方净额抓取不完整，本次跳过写入（保留旧值）")
         else:
-            print("抓取同花顺官方板块净额（%s）..." % new_day)
-            # 日级原子性：官方净额须覆盖绝大多数板块（>=80）才写入，避免混口径；
-            # 不足时等待重试（hyzjl 页面偶发不稳定/限流）
-            today = None
-            for rnd in range(3):
-                today = fetch_ths_sector_flow()
-                if today and len(today) >= 80:
+            # 交叉验证：hyzjl 涨跌幅列 vs 板块指数最新交易日涨幅，一致率高则确认数据同日
+            ok_cnt, total = 0, 0
+            idx = dates.index(new_day) if new_day in dates else -1
+            for nm, f in today.items():
+                if idx < 0:
                     break
-                print(
-                    "[warn] 官方净额仅 %s 个板块（需要 >=80），等待 60s 重试（第 %d 轮）"
-                    % (len(today) if today else 0, rnd + 1),
-                    flush=True,
-                )
-                time.sleep(60)
-            if not today or len(today) < 80:
-                print("[warn] 官方净额抓取不完整，本次跳过写入（保留旧值）")
+                v = series_chg.get(nm, [None] * len(dates))[idx]
+                if v is not None and f["chg"] is not None:
+                    total += 1
+                    if abs(v - f["chg"]) < 0.05:
+                        ok_cnt += 1
+            if total >= 30 and ok_cnt / total < 0.8:
+                print("[warn] hyzjl 涨跌幅与板块指数不一致（%d/%d），可能日期错位，跳过官方净额写入" % (ok_cnt, total))
             else:
-                # 交叉验证：hyzjl 涨跌幅列 vs 板块指数最新交易日涨幅，一致率高则确认数据同日
-                ok_cnt, total = 0, 0
-                idx = dates.index(new_day) if new_day in dates else -1
-                for nm, f in today.items():
-                    if idx < 0:
-                        break
-                    v = series_chg.get(nm, [None] * len(dates))[idx]
-                    if v is not None and f["chg"] is not None:
-                        total += 1
-                        if abs(v - f["chg"]) < 0.05:
-                            ok_cnt += 1
-                if total >= 30 and ok_cnt / total < 0.8:
-                    print("[warn] hyzjl 涨跌幅与板块指数不一致（%d/%d），可能日期错位，跳过官方净额写入" % (ok_cnt, total))
-                else:
-                    for nm in series_flow:
-                        if nm in today:
-                            series_flow[nm][-1] = today[nm]["net"]
-                    ths_last = new_day
-                    print("官方净额已写入 %d 个板块（交叉验证 %d/%d 通过）" % (len(today), ok_cnt, total))
+                for nm in series_flow:
+                    if nm in today:
+                        series_flow[nm][idx] = today[nm]["net"]
+                ths_last = new_day
+                print("官方净额已写入 %d 个板块（交叉验证 %d/%d 通过）" % (len(today), ok_cnt, total))
 
     # ---------- 3. 写输出 ----------
     payload = {

@@ -2,8 +2,11 @@ name: Update Data & Deploy
 
 on:
   schedule:
-    # 北京时间 16:40（UTC 08:40）每个交易日收盘后更新（避开整点高峰，降低调度延迟）
+    # 北京时间 16:40（UTC 08:40）收盘后更新
     - cron: "40 8 * * *"
+    # 北京时间 08:10（UTC 00:10）开盘前二次运行：覆盖修正昨日官方净额
+    # （hyzjl 数据盘后数小时内有修正，此时仍显示昨日数据且已修正完毕）
+    - cron: "10 0 * * *"
   workflow_dispatch:
 
 permissions:
