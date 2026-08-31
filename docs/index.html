@@ -130,7 +130,7 @@ let SECTORS = null;       // 站点内板块快照
 const state = { tab: "chg", mode: "all", topn: 20, singleName: null };
 const chart = echarts.init(document.getElementById("chart"));
 const TAB_UNIT = { chg: "%", chg5: "%", netinflow: "亿元" };
-const TAB_LABEL = { chg: "涨跌幅", chg5: "5日涨幅", netinflow: "主力净流入" };
+const TAB_LABEL = { chg: "涨幅", chg5: "5日涨幅", netinflow: "主力净流入" };
 
 /* ============ 数据加载 ============ */
 async function loadAll() {
@@ -243,7 +243,7 @@ function singleViewOption(name) {
   return {
     animation: false,
     grid: { top: 36, left: 54, right: 66, bottom: 96 },
-    legend: { bottom: 38, left: 20, data: [name, name + " · 数值"], textStyle: { fontSize: 11, color: "#3a3a3c" } },
+    legend: { bottom: 38, left: 20, data: [name, name + " · " + TAB_LABEL[state.tab]], textStyle: { fontSize: 11, color: "#3a3a3c" } },
     tooltip: {
       trigger: "axis", confine: true,
       backgroundColor: "rgba(29,29,31,.94)", borderWidth: 0, textStyle: { color: "#fff", fontSize: 11.5 },
@@ -251,7 +251,7 @@ function singleViewOption(name) {
         const di = params[0].dataIndex;
         let html = "<b>" + DATA.dates[di] + "</b><br>" + name +
           "：排名 <span style='color:#ffd60a;font-family:var(--mono)'>#" + (rankArr[name][di] ?? "-") + "</span>" +
-          "　数值 <span style='font-family:var(--mono)'>" + fmtV(values[di]) + "</span>";
+          "　" + TAB_LABEL[state.tab] + " <span style='font-family:var(--mono)'>" + fmtV(values[di]) + "</span>";
         return html;
       },
     },
@@ -359,7 +359,7 @@ document.getElementById("sectorSelect").addEventListener("change", e => {
 
 /* 点击图例：全视图 → 进入该板块单视图；单板块视图 → 再点当前板块回全视图，点其他板块切换 */
 chart.on("legendselectchanged", function (params) {
-  if (params.name.indexOf(" · 数值") >= 0) return;   // 柱形图例不可交互
+  if (params.name.indexOf(" · ") >= 0) return;   // 柱形图例不可交互
   if (state.mode === "single") {
     if (params.name === state.singleName) {
       state.mode = "all"; state.singleName = null;
