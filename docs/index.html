@@ -367,7 +367,7 @@ function render() {
   const ld = DATA.meta && DATA.meta.last_date;
   const fd = DATA.meta && DATA.meta.ths_last_date;
   if (ld && fd && ld > fd) {
-    flowBadge.textContent = "⏳ 主力净流入最新数据（" + ld + "）尚未获取，结算中——腾讯资金流约 17:00 结算，之后 30 分钟内自动更新";
+    flowBadge.textContent = "⏳ 主力净流入最新数据（" + ld + "）尚未获取，结算中";
     flowBadge.classList.add("show");
   } else {
     flowBadge.classList.remove("show");
