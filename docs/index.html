@@ -243,7 +243,13 @@ function singleViewOption(name) {
   return {
     animation: false,
     grid: { top: 36, left: 54, right: 66, bottom: 96 },
-    legend: { bottom: 38, left: 20, data: [name, name + " · " + TAB_LABEL[state.tab]], textStyle: { fontSize: 11, color: "#3a3a3c" } },
+    legend: {
+      type: "scroll", bottom: 38, left: 20, right: 20,
+      data: [name, name + " · " + TAB_LABEL[state.tab]],
+      selected: { [name]: true, [name + " · " + TAB_LABEL[state.tab]]: true },
+      icon: "roundRect", itemWidth: 14, itemHeight: 3,
+      textStyle: { fontSize: 11, color: "#3a3a3c" },
+    },
     tooltip: {
       trigger: "axis", confine: true,
       backgroundColor: "rgba(29,29,31,.94)", borderWidth: 0, textStyle: { color: "#fff", fontSize: 11.5 },
@@ -267,7 +273,7 @@ function singleViewOption(name) {
     series: [
       { name, type: "line", yAxisIndex: 0, data: rankArr[name], symbol: "none", lineStyle: { width: 2.2, color: "#0071e3" }, z: 3 },
       {
-        name: name + " · 数值", type: "bar", yAxisIndex: 1, data: values,
+        name: name + " · " + TAB_LABEL[state.tab], type: "bar", yAxisIndex: 1, data: values,
         barMaxWidth: 22,
         itemStyle: { color: p => p.value >= 0 ? "#ff3b30" : "#34c759", opacity: 0.82, borderRadius: [3, 3, 0, 0] },
         z: 2,
