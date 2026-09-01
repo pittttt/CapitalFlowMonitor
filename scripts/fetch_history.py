@@ -275,6 +275,20 @@ def main():
             ths_last = new_day
             print("主力净流入已写入 %d 个板块 × %d 个交易日（全市场 %d 只）" % (len(code_to_sector), len(target_dates), len(all_codes)))
 
+    # ---------- 2b. 3日/5日主力净流入（滚动累计求和） ----------
+    def rolling_sum(arr, n):
+        out = []
+        for i in range(len(arr)):
+            window = arr[max(0, i - n + 1): i + 1]
+            if len(window) < n or any(v is None for v in window):
+                out.append(None)
+            else:
+                out.append(round(sum(window), 4))
+        return out
+
+    series_flow3 = {nm: rolling_sum(arr, 3) for nm, arr in series_flow.items()}
+    series_flow5 = {nm: rolling_sum(arr, 5) for nm, arr in series_flow.items()}
+
     # ---------- 3. 写输出 ----------
     payload = {
         "meta": {
@@ -293,6 +307,8 @@ def main():
             "chg3": series_chg3,
             "chg5": series_chg5,
             "netinflow": series_flow,
+            "netinflow3": series_flow3,
+            "netinflow5": series_flow5,
         },
     }
     os.makedirs(os.path.dirname(HISTORY_FILE), exist_ok=True)
