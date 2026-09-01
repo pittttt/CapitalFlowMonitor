@@ -40,8 +40,10 @@
   .bar-i{width:4px;height:15px;border-radius:3px;background:var(--blue)}
   .card-head h2{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px;margin-right:8px}
 
-  /* tabs */
-  .tabs{display:flex;gap:2px;background:#f0f0f3;border-radius:10px;padding:3px}
+  /* tabs 独占一行，筛选控件第二行 */
+  .tabs{display:flex;gap:2px;background:#f0f0f3;border-radius:10px;padding:3px;flex-basis:100%;order:2}
+  .card-head h2{order:1}
+  .card-head .topn{order:3;margin-left:0}
   .tab{border:none;background:transparent;font-family:var(--sans);font-size:12.5px;font-weight:600;color:var(--sub);padding:5px 14px;border-radius:8px;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center}
   .tab.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
   .tab .hint{position:relative;display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;margin-left:3px;color:var(--sub2);cursor:help;font-size:11px;line-height:1}
