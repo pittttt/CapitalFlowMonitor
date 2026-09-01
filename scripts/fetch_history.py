@@ -85,18 +85,20 @@ def load_json(path):
 
 
 def fetch_sector_klines(sectors):
-    """拉全部板块指数日K，返回 {code: {date: close}}。"""
+    """拉全部板块指数日K，返回 ({code: {date: close}}, {code: {date: amount}})。"""
     out = {}
+    out_amount = {}
     for i, s in enumerate(sectors):
         try:
             d = sector_kline(s["code"])
             bars = d["bars"][-FETCH_DAYS:]
             out[s["code"]] = {b["date"]: b["close"] for b in bars}
+            out_amount[s["code"]] = {b["date"]: b.get("amount") for b in bars}
         except Exception as e:  # noqa: BLE001
             print("[warn] 板块指数 %s(%s) 拉取失败: %s" % (s["name"], s["code"], e), flush=True)
         if (i + 1) % 10 == 0:
             print("板块指数 [%d/%d]" % (i + 1, len(sectors)), flush=True)
-    return out
+    return out, out_amount
 
 
 def compute_kline_series(closes_by_date, dates, day_chg=None):
@@ -157,7 +159,7 @@ def main():
 
     # ---------- 1. 板块指数 → 涨幅 / 5日涨幅 ----------
     print("拉取板块指数日K（%d 个板块）..." % len(sectors))
-    klines = fetch_sector_klines(sectors)
+    klines, kline_amounts = fetch_sector_klines(sectors)
 
     # 最新交易日以腾讯 K 线为准（收盘即有当日数据；10jqka last.js 当日数据大面积滞后数小时）
     try:
@@ -289,6 +291,14 @@ def main():
     series_flow3 = {nm: rolling_sum(arr, 3) for nm, arr in series_flow.items()}
     series_flow5 = {nm: rolling_sum(arr, 5) for nm, arr in series_flow.items()}
 
+    # ---------- 2c. 板块每日成交额（亿元，用于单板块视图柱状图） ----------
+    series_amount = {}
+    for s in sectors:
+        amounts = kline_amounts.get(s["code"]) or {}
+        series_amount[s["name"]] = [
+            round(amounts.get(d, 0) / 1e8, 1) if amounts.get(d) else None for d in dates
+        ]
+
     # ---------- 3. 写输出 ----------
     payload = {
         "meta": {
@@ -309,6 +319,7 @@ def main():
             "netinflow": series_flow,
             "netinflow3": series_flow3,
             "netinflow5": series_flow5,
+            "amount": series_amount,
         },
     }
     os.makedirs(os.path.dirname(HISTORY_FILE), exist_ok=True)

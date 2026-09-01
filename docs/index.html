@@ -309,14 +309,19 @@ function singleViewOption(name) {
   const unit = TAB_UNIT[state.tab];
   const isFlow = ["netinflow", "netinflow3", "netinflow5"].indexOf(state.tab) >= 0;
   const fmtV = isFlow ? v => v == null ? "-" : v.toFixed(2) + "亿" : v => fmt(v) + "%";
+  const chgArr = DATA.series.chg[name] || [];
+  const amtArr = (DATA.series.amount && DATA.series.amount[name]) || [];
 
   return {
     animation: false,
-    grid: { top: 36, left: 70, right: 66, bottom: 96 },
+    grid: [
+      { top: 36, left: 70, right: 66, bottom: 168 },          // 主图（排名+数值）
+      { left: 70, right: 66, bottom: 96, height: 58 },        // 成交额柱状图
+    ],
     legend: {
       type: "scroll", bottom: 38, left: 20, right: 20,
-      data: [name, name + " · " + TAB_LABEL[state.tab]],
-      selected: { [name]: true, [name + " · " + TAB_LABEL[state.tab]]: true },
+      data: [name, name + " · " + TAB_LABEL[state.tab], name + " · 成交额"],
+      selected: { [name]: true, [name + " · " + TAB_LABEL[state.tab]]: true, [name + " · 成交额"]: true },
       icon: "roundRect", itemWidth: 14, itemHeight: 3,
       textStyle: { fontSize: 11, color: "#3a3a3c" },
     },
@@ -328,13 +333,21 @@ function singleViewOption(name) {
         let html = "<b>" + DATA.dates[di] + "</b><br>" + name +
           "：排名 <span style='color:#ffd60a;font-family:var(--mono)'>#" + (rankArr[name][di] ?? "-") + "</span>" +
           "　" + TAB_LABEL[state.tab] + " <span style='font-family:var(--mono)'>" + fmtV(values[di]) + "</span>";
+        if (amtArr[di] != null) {
+          html += "<br>成交额 <span style='font-family:var(--mono)'>" + amtArr[di].toFixed(0) + "亿</span>" +
+            "　涨跌 <span style='font-family:var(--mono);color:" + (chgArr[di] >= 0 ? "#ff453a" : "#30d158") + "'>" + fmt(chgArr[di]) + "%</span>";
+        }
         return html;
       },
     },
-    xAxis: { type: "category", data: DATA.dates, boundaryGap: true, axisLine: { lineStyle: { color: "#d2d2d7" } }, axisLabel: { fontSize: 10.5, color: "#86868b" } },
+    xAxis: [
+      { type: "category", data: DATA.dates, boundaryGap: true, axisLine: { lineStyle: { color: "#d2d2d7" } }, axisLabel: { fontSize: 10.5, color: "#86868b" } },
+      { type: "category", gridIndex: 1, data: DATA.dates, boundaryGap: true, axisLabel: { show: false }, axisLine: { lineStyle: { color: "#d2d2d7" } }, axisTick: { show: false } },
+    ],
     yAxis: [
       { type: "value", inverse: true, min: 1, max: 90, interval: 10, name: "排名", nameTextStyle: { fontSize: 10.5, color: "#86868b" }, axisLabel: { fontSize: 10.5, color: "#86868b" }, splitLine: { lineStyle: { color: "#f0f0f3" } } },
       { type: "value", name: unit, nameTextStyle: { fontSize: 10.5, color: "#86868b" }, axisLabel: { fontSize: 10.5, color: "#86868b" }, splitLine: { show: false } },
+      { type: "value", gridIndex: 1, name: "成交额(亿)", nameTextStyle: { fontSize: 10.5, color: "#86868b" }, axisLabel: { fontSize: 10, color: "#86868b" }, splitLine: { show: false } },
     ],
     dataZoom: [
       { type: "slider", bottom: 6, height: 20, borderColor: "#e6e6ea", backgroundColor: "#f7f7f9", fillerColor: "rgba(0,113,227,.12)", textStyle: { color: "#86868b", fontSize: 10 } },
@@ -346,6 +359,12 @@ function singleViewOption(name) {
         name: name + " · " + TAB_LABEL[state.tab], type: "bar", yAxisIndex: 1, data: values,
         barMaxWidth: 22,
         itemStyle: { color: p => p.value >= 0 ? "#ff3b30" : "#34c759", opacity: 0.82, borderRadius: [3, 3, 0, 0] },
+        z: 2,
+      },
+      {
+        name: name + " · 成交额", type: "bar", xAxisIndex: 1, yAxisIndex: 2, data: amtArr,
+        barMaxWidth: 16,
+        itemStyle: { color: p => chgArr[p.dataIndex] >= 0 ? "#ff3b30" : "#34c759", opacity: 0.55, borderRadius: [2, 2, 0, 0] },
         z: 2,
       },
     ],

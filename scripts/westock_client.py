@@ -137,6 +137,7 @@ def sector_kline(code):
             "high": float(parts[2]),
             "low": float(parts[3]),
             "close": float(parts[4]),
+            "amount": float(parts[6]),  # 成交额(元)
         })
     bars.sort(key=lambda x: x["date"])
     return {"name": name, "bars": bars}
