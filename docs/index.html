@@ -55,14 +55,16 @@
   .seg button{border:none;background:transparent;font-family:var(--sans);font-size:11.5px;font-weight:600;color:var(--sub);padding:4px 10px;border-radius:6px;cursor:pointer}
   .seg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
 
-  .sector-select{font-family:var(--sans);font-size:11.5px;font-weight:600;color:var(--ink);background:#fff;border:1px solid var(--line);padding:5px 10px;border-radius:8px;width:150px;box-shadow:var(--shadow)}
-  .sector-select:focus{outline:none;border-color:var(--blue)}
-  .sector-search{position:relative;display:inline-block}
-  .sector-list{display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);max-height:260px;overflow-y:auto;z-index:30}
-  .sector-list.show{display:block}
-  .sector-list .item{padding:6px 10px;font-size:12px;cursor:pointer;display:flex;justify-content:space-between;gap:8px}
-  .sector-list .item:hover{background:#f0f7ff}
-  .sector-list .item .rk{font-family:var(--mono);font-size:10.5px;color:var(--sub2)}
+  .card-body{display:flex;gap:14px;align-items:stretch}
+  #chart{flex:1;width:100%;height:600px}
+  .sector-panel{width:200px;flex:none;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#fbfbfd}
+  .sector-panel-input{font-family:var(--sans);font-size:12px;padding:8px 11px;border:none;border-bottom:1px solid var(--line);background:#fff;outline:none}
+  .sector-panel-input:focus{box-shadow:inset 0 -2px 0 var(--blue)}
+  .sector-panel-list{flex:1;overflow-y:auto;padding:4px 0}
+  .sector-panel-list .item{padding:5px 11px;font-size:12px;cursor:pointer;display:flex;justify-content:space-between;gap:8px;align-items:center}
+  .sector-panel-list .item:hover{background:#f0f7ff}
+  .sector-panel-list .item.on{background:#e8f2fd;font-weight:600}
+  .sector-panel-list .item .rk{font-family:var(--mono);font-size:10.5px;color:var(--sub2)}
 
   .backbtn{display:none;font-size:11.5px;color:var(--blue);background:#f0f7ff;border:1px solid #cfe5fb;padding:4px 11px;border-radius:999px;cursor:pointer;font-weight:600}
   .backbtn.show{display:inline-block}
@@ -113,16 +115,18 @@
           <button data-n="20" class="on">Top20</button>
           <button data-n="10">Top10</button>
         </div>
-        <div class="sector-search">
-          <input id="sectorInput" class="sector-select" placeholder="搜索板块…" autocomplete="off">
-          <div class="sector-list" id="sectorList"></div>
-        </div>
         <button class="backbtn" id="backBtn">← 返回全部板块</button>
       </div>
     </div>
     <div class="badge" id="flowBadge"></div>
     <div class="badge" id="sectorBadge"></div>
-    <div id="chart"></div>
+    <div class="card-body">
+      <div id="chart"></div>
+      <div class="sector-panel">
+        <input id="sectorInput" class="sector-panel-input" placeholder="搜索板块…" autocomplete="off">
+        <div class="sector-panel-list" id="sectorList"></div>
+      </div>
+    </div>
     <div class="hint" id="hint">点击下方图例中的板块名，可查看该板块的排名曲线与具体数值；再次点击或点「返回全部板块」回到全视图 · 拖动底部滑块选择时间窗口</div>
   </div>
 
@@ -363,8 +367,8 @@ function render() {
   document.querySelector(".topn .lbl").style.visibility = state.mode === "single" ? "hidden" : "visible";
   document.querySelector("#topn").style.visibility = state.mode === "single" ? "hidden" : "visible";
 
-  /* 板块搜索框：全视图时可见 */
-  document.getElementById("sectorInput").style.visibility = state.mode === "single" ? "hidden" : "visible";
+  /* 板块面板：按最新排名渲染，高亮当前单板块视图的板块 */
+  renderSectorList(sectorInput.value.trim());
 
   /* 主力净流入未获取标记：ths_last_date < last_date 说明最新交易日资金流尚未结算写入 */
   const flowBadge = document.getElementById("flowBadge");
@@ -421,49 +425,27 @@ document.getElementById("backBtn").addEventListener("click", () => {
   render();
 });
 
-/* 板块搜索下拉：输入过滤、点击选择进入单板块视图 */
+/* 板块面板：全部板块列表（按最新排名）+ 顶部搜索过滤，点击进入单板块视图 */
 const sectorInput = document.getElementById("sectorInput");
 const sectorList = document.getElementById("sectorList");
-let sectorRanks = [];
 
-function showSectorList(q) {
+function renderSectorList(q) {
   if (!DATA) return;
-  const names = Object.keys(DATA.series[state.tab]);
-  sectorRanks = latestOrder(state.tab);
-  const hits = q
-    ? sectorRanks.filter(n => n.indexOf(q) >= 0)
-    : sectorRanks.slice(0, 10);
-  if (!hits.length) {
-    sectorList.classList.remove("show");
-    return;
-  }
+  const order = latestOrder(state.tab);
+  const hits = q ? order.filter(n => n.indexOf(q) >= 0) : order;
   sectorList.innerHTML = hits.map(n =>
-    '<div class="item" data-n="' + n + '"><span>' + n + '</span>' +
-    '<span class="rk">#' + (sectorRanks.indexOf(n) + 1) + '</span></div>').join("");
-  sectorList.classList.add("show");
+    '<div class="item' + (state.mode === "single" && state.singleName === n ? " on" : "") + '" data-n="' + n + '">' +
+    "<span>" + n + "</span>" +
+    '<span class="rk">#' + (order.indexOf(n) + 1) + "</span></div>").join("");
 }
-sectorInput.addEventListener("input", e => showSectorList(e.target.value.trim()));
-sectorInput.addEventListener("focus", () => showSectorList(sectorInput.value.trim()));
-sectorInput.addEventListener("keydown", e => {
-  if (e.key === "Enter") {
-    const first = sectorList.querySelector(".item");
-    if (first) { pickSector(first.dataset.n); e.preventDefault(); }
-  } else if (e.key === "Escape") {
-    sectorList.classList.remove("show");
-  }
-});
+sectorInput.addEventListener("input", e => renderSectorList(e.target.value.trim()));
 sectorList.addEventListener("click", e => {
   const it = e.target.closest(".item");
   if (it) pickSector(it.dataset.n);
 });
-document.addEventListener("click", e => {
-  if (!e.target.closest(".sector-search")) sectorList.classList.remove("show");
-});
 function pickSector(n) {
   if (!n) return;
   state.mode = "single"; state.singleName = n;
-  sectorInput.value = "";
-  sectorList.classList.remove("show");
   render();
 }
 
