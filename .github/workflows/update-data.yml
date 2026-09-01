@@ -21,6 +21,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 并发窗口保护：其他运行可能刚提交数据，先拉取最新 history.json，
+      # 否则 ths_last_date 读到旧值会导致重复拉取全市场
+      - name: Sync latest data
+        run: git pull origin main --no-edit || true
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
