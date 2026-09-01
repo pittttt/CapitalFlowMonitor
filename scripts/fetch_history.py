@@ -129,6 +129,12 @@ def main():
             # 主力净流入已是最新（上次运行已写入），无需重复拉取全市场
             print("主力净流入已是 %s 最新数据，跳过" % new_day)
         else:
+            # 时间闸门：当日数据须北京时间 17:00（UTC 09:00）后才写入（腾讯约 17:00 结算）
+            # ClosePrice 校验无法区分盘中实时与收盘结算数据，须先用时间闸门排除盘中
+            now_utc = dt.datetime.now(dt.timezone.utc)
+            if new_day == dt.date.today().strftime("%Y-%m-%d") and now_utc.hour < 9:
+                print("[warn] 当日数据 17:00（北京）结算前不写入（当前 UTC %s），本次跳过" % now_utc.strftime("%H:%M"), flush=True)
+                sys.exit(3)
             # 结算校验：资金流记录自带 ClosePrice 与 K 线收盘价对比（K线收盘即更新，资金流结算慢）
             # 未结算时跳过资金流写入并 exit 3，workflow 每 30 分钟重试
             sample_codes = ["sh600519", "sz000001", "sh601318", "sz300750", "sz000858"]
