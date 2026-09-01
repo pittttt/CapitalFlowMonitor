@@ -55,9 +55,8 @@
   .seg button{border:none;background:transparent;font-family:var(--sans);font-size:11.5px;font-weight:600;color:var(--sub);padding:4px 10px;border-radius:6px;cursor:pointer}
   .seg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
 
-  .sector-select{font-family:var(--sans);font-size:11.5px;font-weight:600;color:var(--ink);background:#fff;border:1px solid var(--line);padding:4px 10px;border-radius:8px;cursor:pointer;max-width:170px;box-shadow:var(--shadow)}
+  .sector-select{font-family:var(--sans);font-size:11.5px;font-weight:600;color:var(--ink);background:#fff;border:1px solid var(--line);padding:5px 10px;border-radius:8px;width:150px;box-shadow:var(--shadow)}
   .sector-select:focus{outline:none;border-color:var(--blue)}
-  .sector-select option{font-weight:500}
 
   .backbtn{display:none;font-size:11.5px;color:var(--blue);background:#f0f7ff;border:1px solid #cfe5fb;padding:4px 11px;border-radius:999px;cursor:pointer;font-weight:600}
   .backbtn.show{display:inline-block}
@@ -108,7 +107,8 @@
           <button data-n="20" class="on">Top20</button>
           <button data-n="10">Top10</button>
         </div>
-        <select id="sectorSelect" class="sector-select" title="选择板块查看单板块趋势"></select>
+        <input id="sectorInput" list="sectorList" class="sector-select" placeholder="搜索板块…" autocomplete="off">
+        <datalist id="sectorList"></datalist>
         <button class="backbtn" id="backBtn">← 返回全部板块</button>
       </div>
     </div>
@@ -355,13 +355,12 @@ function render() {
   document.querySelector(".topn .lbl").style.visibility = state.mode === "single" ? "hidden" : "visible";
   document.querySelector("#topn").style.visibility = state.mode === "single" ? "hidden" : "visible";
 
-  /* 板块下拉：按最新排名排序，全视图时可见；选中进入单板块视图 */
-  const sel = document.getElementById("sectorSelect");
-  sel.style.visibility = state.mode === "single" ? "hidden" : "visible";
+  /* 板块搜索：datalist 按最新排名排序，全视图时可见；选中进入单板块视图 */
+  const inp = document.getElementById("sectorInput");
+  inp.style.visibility = state.mode === "single" ? "hidden" : "visible";
   const order = latestOrder(state.tab);
-  sel.innerHTML = '<option value="">选择板块…</option>' +
-    order.map(n => '<option value="' + n + '">' + n + "</option>").join("");
-  sel.value = "";
+  document.getElementById("sectorList").innerHTML =
+    order.map(n => '<option value="' + n + '">').join("");
 
   /* 主力净流入未获取标记：ths_last_date < last_date 说明最新交易日资金流尚未结算写入 */
   const flowBadge = document.getElementById("flowBadge");
@@ -418,13 +417,15 @@ document.getElementById("backBtn").addEventListener("click", () => {
   render();
 });
 
-/* 下拉选择板块 → 单板块视图 */
-document.getElementById("sectorSelect").addEventListener("change", e => {
-  const v = e.target.value;
-  if (!v) return;
-  state.mode = "single"; state.singleName = v;
-  e.target.value = "";
-  render();
+/* 搜索选择板块 → 单板块视图（校验值在板块集合内，回车或选中 datalist 项触发） */
+document.getElementById("sectorInput").addEventListener("change", e => {
+  const v = e.target.value.trim();
+  if (!v || !DATA || !DATA.series[state.tab]) return;
+  if (v in DATA.series[state.tab]) {
+    state.mode = "single"; state.singleName = v;
+    e.target.value = "";
+    render();
+  }
 });
 
 /* 点击图例：全视图 → 进入该板块单视图；单板块视图 → 再点当前板块回全视图，点其他板块切换 */
