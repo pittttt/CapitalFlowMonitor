@@ -315,8 +315,8 @@ function singleViewOption(name) {
   return {
     animation: false,
     grid: [
-      { top: 34, left: 112, right: 66, bottom: 120 },         // 主图（排名线+数值柱形，左侧容纳双轴）
-      { left: 112, right: 66, bottom: 64, height: 48 },       // 成交额小图（底部，主图下方留间距）
+      { top: 34, left: 136, right: 66, bottom: 144 },         // 主图（排名线+数值柱形，左侧容纳双轴）
+      { left: 136, right: 66, bottom: 56, height: 46 },       // 成交额小图（底部，主图下方大间距）
     ],
     axisPointer: { link: [{ xAxisIndex: "all" }] },           // 竖线贯穿两图
     legend: {
@@ -348,7 +348,7 @@ function singleViewOption(name) {
     yAxis: [
       { type: "value", inverse: true, min: 1, max: 90, interval: 10, name: "排名", nameLocation: "start", nameTextStyle: { fontSize: 10.5, color: "#86868b" }, axisLabel: { fontSize: 10.5, color: "#86868b" }, splitLine: { lineStyle: { color: "#f0f0f3" } } },
       { type: "value", name: unit, nameTextStyle: { fontSize: 10.5, color: "#86868b" }, axisLabel: { fontSize: 10.5, color: "#86868b" }, splitLine: { show: false } },
-      { type: "value", gridIndex: 1, position: "left", offset: 40, name: "成交额(亿)", nameLocation: "end", nameTextStyle: { fontSize: 10.5, color: "#86868b" }, axisLabel: { fontSize: 10, color: "#86868b" }, splitLine: { show: false } },
+      { type: "value", gridIndex: 1, position: "left", offset: 55, name: "成交额(亿)", nameLocation: "end", nameTextStyle: { fontSize: 10.5, color: "#86868b" }, axisLabel: { fontSize: 10, color: "#86868b" }, splitLine: { show: false } },
     ],
     dataZoom: [
       { type: "slider", bottom: 8, height: 18, borderColor: "#e6e6ea", backgroundColor: "#f7f7f9", fillerColor: "rgba(0,113,227,.12)", textStyle: { color: "#86868b", fontSize: 10 } },
