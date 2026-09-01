@@ -351,13 +351,13 @@ function singleViewOption(name) {
       { name, type: "line", yAxisIndex: 0, data: rankArr[name], symbol: "none", lineStyle: { width: 2.2, color: "#0071e3" }, z: 3 },
       {
         name: name + " · " + TAB_LABEL[state.tab], type: "bar", yAxisIndex: 1, data: values,
-        barMaxWidth: 22,
+        barMaxWidth: 22, barGap: "-100%",
         itemStyle: { color: p => p.value >= 0 ? "#ff3b30" : "#34c759", opacity: 0.82, borderRadius: [3, 3, 0, 0] },
         z: 2,
       },
       {
         name: name + " · 成交额", type: "bar", yAxisIndex: 2, data: amtArr,
-        barMaxWidth: 16,
+        barMaxWidth: 16, barGap: "-100%",
         itemStyle: { color: p => chgArr[p.dataIndex] >= 0 ? "#ff3b30" : "#34c759", opacity: 0.35, borderRadius: [2, 2, 0, 0] },
         z: 1,
       },
