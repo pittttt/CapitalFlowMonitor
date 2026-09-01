@@ -315,8 +315,8 @@ function singleViewOption(name) {
   return {
     animation: false,
     grid: [
-      { top: 34, left: 70, right: 66, bottom: 96 },           // 主图（排名+数值）
-      { left: 70, right: 66, bottom: 26, height: 62 },        // 成交额柱状图（主图下方）
+      { top: 34, left: 70, right: 66, bottom: 98 },           // 主图（底边与成交额图无缝衔接）
+      { left: 70, right: 66, bottom: 42, height: 56 },        // 成交额柱状图（紧贴主图底部）
     ],
     legend: {
       type: "scroll", top: 6, left: 20, right: 20,
@@ -341,8 +341,8 @@ function singleViewOption(name) {
       },
     },
     xAxis: [
-      { type: "category", data: DATA.dates, boundaryGap: true, axisLine: { lineStyle: { color: "#d2d2d7" } }, axisLabel: { fontSize: 10.5, color: "#86868b" } },
-      { type: "category", gridIndex: 1, data: DATA.dates, boundaryGap: true, axisLabel: { show: false }, axisLine: { lineStyle: { color: "#d2d2d7" } }, axisTick: { show: false } },
+      { type: "category", data: DATA.dates, boundaryGap: true, axisLine: { lineStyle: { color: "#d2d2d7" } }, axisLabel: { show: false } },
+      { type: "category", gridIndex: 1, data: DATA.dates, boundaryGap: true, axisLabel: { fontSize: 10, color: "#86868b" }, axisLine: { lineStyle: { color: "#d2d2d7" } }, axisTick: { show: false } },
     ],
     yAxis: [
       { type: "value", inverse: true, min: 1, max: 90, interval: 10, name: "排名", nameLocation: "start", nameTextStyle: { fontSize: 10.5, color: "#86868b" }, axisLabel: { fontSize: 10.5, color: "#86868b" }, splitLine: { lineStyle: { color: "#f0f0f3" } } },
