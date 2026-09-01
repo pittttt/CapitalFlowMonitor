@@ -25,8 +25,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SECTORS_FILE = os.path.join(ROOT, "data", "sectors.json")
 HISTORY_FILE = os.path.join(ROOT, "docs", "data", "history.json")
 
-WINDOW_DAYS = 60        # 输出窗口（交易日）
-FETCH_DAYS = 65         # 拉取窗口（多取 5 天供 5 日涨幅计算）
+WINDOW_DAYS = 90        # 输出窗口（交易日）
+FETCH_DAYS = 95         # 拉取窗口（多取 5 天供 5 日涨幅计算）
+FLOW_LOOKBACK_DAYS = 135  # 全量重建时资金流回溯自然日（约 90+ 交易日）
 
 
 def load_json(path):
@@ -76,7 +77,8 @@ def compute_kline_series(closes_by_date, dates):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=0, help="仅处理前 N 个板块（调试用）")
-    ap.add_argument("--no-flow", action="store_true", help="跳过官方净额抓取")
+    ap.add_argument("--no-flow", action="store_true", help="跳过主力净流入")
+    ap.add_argument("--full", action="store_true", help="主力净流入全量重建（拉取窗口内全部交易日）")
     args = ap.parse_args()
 
     sectors_data = load_json(SECTORS_FILE)
@@ -123,7 +125,7 @@ def main():
     series_flow = {s["name"]: [old_by_date.get(s["name"], {}).get(d) for d in dates] for s in sectors}
 
     if not args.no_flow:
-        if new_day == ths_last:
+        if new_day == ths_last and not args.full:
             # 主力净流入已是最新（上次运行已写入），无需重复拉取全市场
             print("主力净流入已是 %s 最新数据，跳过" % new_day)
         else:
@@ -136,7 +138,15 @@ def main():
                 print("[warn] 资金流数据未结算（%s），本次跳过主力净流入写入" % new_day, flush=True)
                 sys.exit(3)
 
-            print("抓取全市场主力净流入（腾讯 MainNetFlow，聚合到 %s）..." % new_day)
+            if args.full:
+                print("全量重建主力净流入（%d 个交易日）..." % len(dates))
+                start = (dt.date.today() - dt.timedelta(days=FLOW_LOOKBACK_DAYS)).strftime("%Y-%m-%d")
+                target_dates = dates
+            else:
+                print("抓取全市场主力净流入（腾讯 MainNetFlow，聚合到 %s）..." % new_day)
+                start = new_day
+                target_dates = [new_day]
+            print("拉取全市场主力净流入（%s ~ %s）..." % (start, dt.date.today()))
             code_to_sector = {}
             for s in sectors:
                 for c in s["constituents"]:
@@ -144,12 +154,12 @@ def main():
             all_codes = sorted({c for s in sectors for c in s["constituents"]})
             tencent_codes = [("sh" if c.startswith(("60", "68")) else "sz") + c for c in all_codes]
             flows = fund_flow_batch(
-                tencent_codes, new_day, dt.date.today().strftime("%Y-%m-%d"),
+                tencent_codes, start, dt.date.today().strftime("%Y-%m-%d"),
                 workers=8,
                 progress=lambda d, t: print("资金流 %d/%d" % (d, t), flush=True),
             )
             # 按同花顺成分股聚合（元 -> 亿元）
-            sector_sum = {}
+            day_flow_sum = {d: {} for d in target_dates}
             for tc, recs in flows.items():
                 if not recs:
                     continue
@@ -157,14 +167,14 @@ def main():
                 if not nm:
                     continue
                 for rec in recs:
-                    if rec["date"] == new_day:
-                        sector_sum[nm] = sector_sum.get(nm, 0.0) + rec["main_net_flow"]
-            idx = dates.index(new_day) if new_day in dates else -1
+                    if rec["date"] in day_flow_sum:
+                        day_flow_sum[rec["date"]][nm] = day_flow_sum[rec["date"]].get(nm, 0.0) + rec["main_net_flow"]
             for nm in series_flow:
-                if nm in sector_sum and idx >= 0:
-                    series_flow[nm][idx] = round(sector_sum[nm] / 1e8, 4)
+                for i, d in enumerate(dates):
+                    if d in day_flow_sum and nm in day_flow_sum[d]:
+                        series_flow[nm][i] = round(day_flow_sum[d][nm] / 1e8, 4)
             ths_last = new_day
-            print("主力净流入已写入 %d 个板块（全市场 %d 只）" % (len(sector_sum), len(all_codes)))
+            print("主力净流入已写入 %d 个板块 × %d 个交易日（全市场 %d 只）" % (len(code_to_sector), len(target_dates), len(all_codes)))
 
     # ---------- 3. 写输出 ----------
     payload = {
