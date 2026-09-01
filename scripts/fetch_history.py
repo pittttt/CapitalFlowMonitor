@@ -153,23 +153,12 @@ def main():
                     code_to_sector[c] = s["name"]
             all_codes = sorted({c for s in sectors for c in s["constituents"]})
             tencent_codes = [("sh" if c.startswith(("60", "68")) else "sz") + c for c in all_codes]
-            # 当日缓存：同一天多次运行（17:10/17:40/...）不重复拉全市场，缓存命中直接读
-            cache_path = os.path.join(ROOT, "data", "flow_cache_%s.json" % new_day)
-            if not args.full and os.path.exists(cache_path):
-                with open(cache_path, "r", encoding="utf-8") as f:
-                    flows = json.load(f)
-                print("命中当日缓存 %s（%d 只）" % (cache_path, len(flows)))
-            else:
-                flows = fund_flow_batch(
-                    tencent_codes, start, dt.date.today().strftime("%Y-%m-%d"),
-                    workers=8,
-                    progress=lambda d, t: print("资金流 %d/%d" % (d, t), flush=True),
-                )
-                if not args.full:
-                    os.makedirs(os.path.dirname(cache_path), exist_ok=True)
-                    with open(cache_path, "w", encoding="utf-8") as f:
-                        json.dump(flows, f, ensure_ascii=False)
-                    print("已写入当日缓存 %s" % cache_path)
+            # 同一天后续运行由"已是最新跳过"逻辑拦截（ths_last_date 已更新），此处仅首次结算后执行
+            flows = fund_flow_batch(
+                tencent_codes, start, dt.date.today().strftime("%Y-%m-%d"),
+                workers=8,
+                progress=lambda d, t: print("资金流 %d/%d" % (d, t), flush=True),
+            )
             # 按同花顺成分股聚合（元 -> 亿元）
             day_flow_sum = {d: {} for d in target_dates}
             for tc, recs in flows.items():

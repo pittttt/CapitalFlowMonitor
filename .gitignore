@@ -1,9 +1,6 @@
 # 10jqka 登录 cookie（敏感凭证，不入库；GitHub Actions 用 Secrets.THS_COOKIE）
 .ths_cookie
 
-# 当日资金流缓存（运行时生成，不入库）
-data/flow_cache_*.json
-
 __pycache__/
 *.pyc
 .claude/
