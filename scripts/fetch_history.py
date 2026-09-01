@@ -187,7 +187,7 @@ def main():
     if ths_today and len(ths_today) >= 80:
         for s in sectors:
             if s["name"] in ths_today:
-                day_chg[s["name"]] = ths_today[s["name"]]["chg"]
+                day_chg[s["name"]] = {dates[-1]: ths_today[s["name"]]["chg"]}
         print("当日涨跌幅已用 hyzjl 补齐 %d 个板块" % len(day_chg))
     else:
         print("[warn] hyzjl 当日数据不完整（%s），涨幅保持 last.js 数据" % (len(ths_today) if ths_today else 0))
