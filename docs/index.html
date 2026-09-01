@@ -307,7 +307,7 @@ function singleViewOption(name) {
   const rankArr = ranks[state.tab];
   const values = series[name];
   const unit = TAB_UNIT[state.tab];
-  const isFlow = state.tab === "netinflow";
+  const isFlow = ["netinflow", "netinflow3", "netinflow5"].indexOf(state.tab) >= 0;
   const fmtV = isFlow ? v => v == null ? "-" : v.toFixed(2) + "亿" : v => fmt(v) + "%";
 
   return {
