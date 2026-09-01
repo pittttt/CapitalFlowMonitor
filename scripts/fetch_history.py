@@ -15,11 +15,12 @@ import argparse
 import datetime as dt
 import json
 import os
+import re
 import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from westock_client import sector_kline, fund_flow_batch, flow_settled  # noqa: E402
+from westock_client import sector_kline, kline, fund_flow_batch, flow_settled, _ths_session  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SECTORS_FILE = os.path.join(ROOT, "data", "sectors.json")
@@ -28,6 +29,52 @@ HISTORY_FILE = os.path.join(ROOT, "docs", "data", "history.json")
 WINDOW_DAYS = 90        # 输出窗口（交易日）
 FETCH_DAYS = 95         # 拉取窗口（多取 5 天供 5 日涨幅计算）
 FLOW_LOOKBACK_DAYS = 135  # 全量重建时资金流回溯自然日（约 90+ 交易日）
+
+# 同花顺行业资金流页面（当日板块净额与涨跌幅，单位亿元/%）
+THS_FLOW_URL = "https://data.10jqka.com.cn/funds/hyzjl/field/tradezdf/order/desc/page/{pg}/ajax/1/free/1/"
+THS_FLOW_REFERER = "https://data.10jqka.com.cn/funds/hyzjl/"
+
+
+def fetch_ths_sector_flow():
+    """抓同花顺行业资金流页面当日数据。
+
+    返回 {板块名: {"net": 净额(亿元), "chg": 涨跌幅(%)}}；失败返回 None。
+    当日涨跌幅比 last.js 更新及时，用于补齐最新交易日数据。
+    """
+    out = {}
+    sess = _ths_session(THS_FLOW_REFERER)
+    for pg in (1, 2):
+        r = None
+        for attempt in range(5):
+            try:
+                r = sess.get(THS_FLOW_URL.format(pg=pg), timeout=30)
+                if r.status_code in (401, 403):
+                    raise RuntimeError("http %s" % r.status_code)
+                r.raise_for_status()
+                r.encoding = "gbk"
+                break
+            except (Exception, OSError):  # noqa: BLE001
+                if attempt < 4:
+                    time.sleep(3 * (attempt + 1))
+                else:
+                    r = None
+        if r is None:
+            print("[warn] hyzjl 第 %d 页连续失败" % pg, flush=True)
+            continue
+        for row in re.findall(r"<tr[^>]*>(.*?)</tr>", r.text, re.S):
+            m = re.search(r"detail/code/(\d+)/[^>]*>([^<]+)<", row)
+            tds = re.findall(r"<td[^>]*>(.*?)</td>", row, re.S)
+            if not m or len(tds) < 7:
+                continue
+            name = m.group(2).strip()
+            clean = lambda s: re.sub(r"<[^>]+>", "", s).strip().replace(",", "")
+            try:
+                net = float(clean(tds[6]))
+                chg = float(clean(tds[3]).rstrip("%"))
+            except ValueError:
+                continue
+            out[name] = {"net": net, "chg": chg}
+    return out or None
 
 
 def load_json(path):
@@ -52,26 +99,40 @@ def fetch_sector_klines(sectors):
     return out
 
 
-def compute_kline_series(closes_by_date, dates):
-    """由收盘价序列计算涨幅(%)、3日涨幅(%)和5日涨幅(%)。"""
-    chg, chg3, chg5 = [], [], []
+def compute_kline_series(closes_by_date, dates, day_chg=None):
+    """由收盘价序列计算涨幅(%)、3日涨幅(%)和5日涨幅(%)。
+
+    day_chg: 可选的 {date: 当日涨跌幅(%)} 覆盖（如 hyzjl 页面当日涨幅，比 last.js 更新及时）；
+    3日/5日涨幅用涨跌幅序列滚动复利累计，不依赖缺失的当日收盘价。
+    """
+    chg = []
     prev = None
     for i, d in enumerate(dates):
         c = closes_by_date.get(d)
+        if d in (day_chg or {}):
+            chg.append(day_chg[d])
+            prev = c if c is not None else prev
+            continue
         if c is None:
             chg.append(None)
-            chg3.append(None)
-            chg5.append(None)
             continue
         chg.append(None if prev is None else round((c / prev - 1) * 100, 2))
         prev = c
-    for i, d in enumerate(dates):
-        c = closes_by_date.get(d)
-        c3 = closes_by_date.get(dates[i - 3]) if i >= 3 else None
-        c5 = closes_by_date.get(dates[i - 5]) if i >= 5 else None
-        chg3.append(None if (c is None or c3 is None or c3 <= 0) else round((c / c3 - 1) * 100, 2))
-        chg5.append(None if (c is None or c5 is None or c5 <= 0) else round((c / c5 - 1) * 100, 2))
-    return chg, chg3, chg5
+
+    def roll(n):
+        out = []
+        for i in range(len(dates)):
+            window = [chg[j] for j in range(max(0, i - n + 1), i + 1) if chg[j] is not None]
+            if len(window) < n:
+                out.append(None)
+                continue
+            acc = 1.0
+            for v in window:
+                acc *= 1 + v / 100
+            out.append(round((acc - 1) * 100, 2))
+        return out
+
+    return chg, roll(3), roll(5)
 
 
 def main():
@@ -98,27 +159,53 @@ def main():
     print("拉取板块指数日K（%d 个板块）..." % len(sectors))
     klines = fetch_sector_klines(sectors)
 
-    # 交易日序列：取第一个有数据的板块，否则用旧的 dates
+    # 最新交易日以腾讯 K 线为准（收盘即有当日数据；10jqka last.js 当日数据大面积滞后数小时）
+    try:
+        probe_klines = kline(["sh600519", "sz000001"], "2026-08-01", dt.date.today().strftime("%Y-%m-%d"))
+        t_dates = [b["date"] for bars in probe_klines.values() for b in bars]
+        new_day = max(t_dates) if t_dates else ""
+    except Exception:  # noqa: BLE001
+        new_day = ""
+
+    # 交易日序列：last.js 日期合并最新交易日（last.js 缺当日时补上）
     all_dates = sorted({d for k in klines.values() for d in k})
+    if new_day and new_day not in all_dates:
+        all_dates.append(new_day)
     if not all_dates:
         all_dates = old_dates
     dates = all_dates[-WINDOW_DAYS:]
-    print("交易日: %d 个 (%s ~ %s)" % (len(dates), dates[0], dates[-1]))
+    print("交易日: %d 个 (%s ~ %s)，最新交易日(腾讯K线) = %s" % (len(dates), dates[0], dates[-1], new_day))
+
+    # 当日涨跌幅补齐：last.js 当日数据大面积滞后（19:00 时多数板块仍缺），
+    # 用 hyzjl 页面当日涨跌幅覆盖最新交易日（页面数据更新及时）
+    day_chg = {}
+    ths_today = None
+    try:
+        ths_today = fetch_ths_sector_flow()
+    except Exception as e:  # noqa: BLE001
+        print("[warn] hyzjl 抓取异常: %s" % e, flush=True)
+    if ths_today and len(ths_today) >= 80:
+        for s in sectors:
+            if s["name"] in ths_today:
+                day_chg[s["name"]] = ths_today[s["name"]]["chg"]
+        print("当日涨跌幅已用 hyzjl 补齐 %d 个板块" % len(day_chg))
+    else:
+        print("[warn] hyzjl 当日数据不完整（%s），涨幅保持 last.js 数据" % (len(ths_today) if ths_today else 0))
 
     series_chg = {}
     series_chg3 = {}
     series_chg5 = {}
     for s in sectors:
         closes = klines.get(s["code"]) or {}
-        chg, chg3, chg5 = compute_kline_series(closes, dates)
+        chg, chg3, chg5 = compute_kline_series(closes, dates, day_chg.get(s["name"]))
         series_chg[s["name"]] = chg
         series_chg3[s["name"]] = chg3
         series_chg5[s["name"]] = chg5
 
     # 告警：哪些板块缺最新交易日数据（10jqka 单板块 last.js 偶发滞后，次日自动补齐）
-    missing = [s["name"] for s in sectors if dates[-1] not in (klines.get(s["code"]) or {})]
+    missing = [s["name"] for s in sectors if series_chg[s["name"]][-1] is None]
     if missing:
-        print("[warn] 以下板块缺少 %s 的板块指数数据（10jqka 单板块滞后，次日自动补齐）: %s" % (dates[-1], "、".join(missing[:10])), flush=True)
+        print("[warn] 以下板块缺少 %s 的涨幅数据: %s" % (dates[-1], "、".join(missing[:10])), flush=True)
 
     # ---------- 2. 主力净流入（腾讯 MainNetFlow 按同花顺成分股聚合，结算校验后写入） ----------
     series_flow = {}
