@@ -115,6 +115,11 @@ def main():
         series_chg3[s["name"]] = chg3
         series_chg5[s["name"]] = chg5
 
+    # 告警：哪些板块缺最新交易日数据（10jqka 单板块 last.js 偶发滞后，次日自动补齐）
+    missing = [s["name"] for s in sectors if dates[-1] not in (klines.get(s["code"]) or {})]
+    if missing:
+        print("[warn] 以下板块缺少 %s 的板块指数数据（10jqka 单板块滞后，次日自动补齐）: %s" % (dates[-1], "、".join(missing[:10])), flush=True)
+
     # ---------- 2. 主力净流入（腾讯 MainNetFlow 按同花顺成分股聚合，结算校验后写入） ----------
     series_flow = {}
     ths_last = old_meta.get("ths_last_date") or ""
