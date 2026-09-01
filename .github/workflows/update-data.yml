@@ -46,10 +46,16 @@ jobs:
           exit $code
 
       # 数据提交后由 GitHub Pages（branch 模式，源 = main 分支 /docs 目录）自动部署
+      # push 前 pull --rebase，避免与本地/其他运行的并发推送冲突
       - name: Commit updated data
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/sectors.json docs/data/history.json docs/data/sectors.json
-          git diff --cached --quiet || git commit -m "chore(data): update sector history $(date +%F)"
-          git push origin HEAD
+          if git diff --cached --quiet; then
+            echo "无数据变化，跳过提交"
+          else
+            git commit -m "chore(data): update sector history $(date +%F)"
+            git pull --rebase origin main
+            git push origin HEAD
+          fi
