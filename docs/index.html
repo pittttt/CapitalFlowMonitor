@@ -314,11 +314,7 @@ function singleViewOption(name) {
 
   return {
     animation: false,
-    grid: [
-      { top: 34, left: 70, right: 66, bottom: 104 },          // 主图（排名+数值）
-      { left: 70, right: 66, bottom: 46, height: 56 },        // 成交额柱状图（与主图同宽，保证横坐标对齐）
-    ],
-    axisPointer: { link: [{ xAxisIndex: "all" }] },           // 竖线贯穿两个图
+    grid: { top: 34, left: 70, right: 96, bottom: 48 },       // 单坐标系：排名线+数值柱形+成交额柱形同图
     legend: {
       bottom: 24, left: 20, right: 20,
       data: [name, name + " · " + TAB_LABEL[state.tab], name + " · 成交额"],
@@ -341,14 +337,11 @@ function singleViewOption(name) {
         return html;
       },
     },
-    xAxis: [
-      { type: "category", data: DATA.dates, boundaryGap: true, axisLine: { lineStyle: { color: "#d2d2d7" } }, axisLabel: { show: false } },
-      { type: "category", gridIndex: 1, data: DATA.dates, boundaryGap: true, axisLabel: { fontSize: 10, color: "#86868b" }, axisLine: { lineStyle: { color: "#d2d2d7" } }, axisTick: { show: false } },
-    ],
+    xAxis: { type: "category", data: DATA.dates, boundaryGap: true, axisLine: { lineStyle: { color: "#d2d2d7" } }, axisLabel: { fontSize: 10.5, color: "#86868b" } },
     yAxis: [
       { type: "value", inverse: true, min: 1, max: 90, interval: 10, name: "排名", nameLocation: "start", nameTextStyle: { fontSize: 10.5, color: "#86868b" }, axisLabel: { fontSize: 10.5, color: "#86868b" }, splitLine: { lineStyle: { color: "#f0f0f3" } } },
       { type: "value", name: unit, nameTextStyle: { fontSize: 10.5, color: "#86868b" }, axisLabel: { fontSize: 10.5, color: "#86868b" }, splitLine: { show: false } },
-      { type: "value", gridIndex: 1, offset: 34, name: "成交额(亿)", nameLocation: "start", nameTextStyle: { fontSize: 10.5, color: "#86868b" }, axisLabel: { fontSize: 10, color: "#86868b" }, splitLine: { show: false } },
+      { type: "value", position: "right", offset: 34, min: 0, max: Math.max(...amtArr.filter(v => v != null)) * 3, name: "成交额(亿)", nameTextStyle: { fontSize: 10.5, color: "#86868b" }, axisLabel: { fontSize: 10, color: "#86868b" }, splitLine: { show: false } },
     ],
     dataZoom: [
       { type: "slider", bottom: 4, height: 16, borderColor: "#e6e6ea", backgroundColor: "#f7f7f9", fillerColor: "rgba(0,113,227,.12)", textStyle: { color: "#86868b", fontSize: 10 } },
@@ -363,10 +356,10 @@ function singleViewOption(name) {
         z: 2,
       },
       {
-        name: name + " · 成交额", type: "bar", xAxisIndex: 1, yAxisIndex: 2, data: amtArr,
-        barMaxWidth: 16,
-        itemStyle: { color: p => chgArr[p.dataIndex] >= 0 ? "#ff3b30" : "#34c759", opacity: 0.55, borderRadius: [2, 2, 0, 0] },
-        z: 2,
+        name: name + " · 成交额", type: "bar", yAxisIndex: 2, data: amtArr,
+        barMaxWidth: 12,
+        itemStyle: { color: p => chgArr[p.dataIndex] >= 0 ? "#ff3b30" : "#34c759", opacity: 0.35, borderRadius: [2, 2, 0, 0] },
+        z: 1,
       },
     ],
   };
