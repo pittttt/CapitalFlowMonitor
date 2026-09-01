@@ -186,7 +186,8 @@ def main():
     # ---------- 3. 写输出 ----------
     payload = {
         "meta": {
-            "updated_at": dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            # GitHub runner 默认 UTC，统一用北京时间（UTC+8）生成更新时间
+            "updated_at": dt.datetime.now(dt.timezone(dt.timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S"),
             "last_date": dates[-1],
             "ths_last_date": ths_last,
             "sectors_fetched_at": sectors_data["fetched_at"],
