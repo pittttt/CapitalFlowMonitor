@@ -320,7 +320,7 @@ function singleViewOption(name) {
     ],
     axisPointer: { link: [{ xAxisIndex: "all" }] },           // 竖线贯穿两图
     legend: {
-      bottom: 34, left: 20, right: 20,
+      bottom: 26, left: 20, right: 20,
       data: [name, name + " · " + TAB_LABEL[state.tab], name + " · 成交额"],
       selected: { [name]: true, [name + " · " + TAB_LABEL[state.tab]]: true, [name + " · 成交额"]: true },
       icon: "roundRect", itemWidth: 14, itemHeight: 3,
@@ -348,7 +348,7 @@ function singleViewOption(name) {
     yAxis: [
       { type: "value", inverse: true, min: 1, max: 90, interval: 10, name: "排名", nameLocation: "start", nameTextStyle: { fontSize: 10.5, color: "#86868b" }, axisLabel: { fontSize: 10.5, color: "#86868b" }, splitLine: { lineStyle: { color: "#f0f0f3" } } },
       { type: "value", name: unit, nameTextStyle: { fontSize: 10.5, color: "#86868b" }, axisLabel: { fontSize: 10.5, color: "#86868b" }, splitLine: { show: false } },
-      { type: "value", gridIndex: 1, offset: 34, name: "成交额(亿)", nameLocation: "start", nameTextStyle: { fontSize: 10.5, color: "#86868b" }, axisLabel: { fontSize: 10, color: "#86868b" }, splitLine: { show: false } },
+      { type: "value", gridIndex: 1, offset: 34, name: "成交额(亿)", nameLocation: "end", nameTextStyle: { fontSize: 10.5, color: "#86868b" }, axisLabel: { fontSize: 10, color: "#86868b" }, splitLine: { show: false } },
     ],
     dataZoom: [
       { type: "slider", bottom: 8, height: 18, borderColor: "#e6e6ea", backgroundColor: "#f7f7f9", fillerColor: "rgba(0,113,227,.12)", textStyle: { color: "#86868b", fontSize: 10 } },
