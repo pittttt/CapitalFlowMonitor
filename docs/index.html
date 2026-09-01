@@ -22,7 +22,7 @@
   }
   *{box-sizing:border-box;margin:0;padding:0}
   body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;line-height:1.5;padding:28px 22px 60px}
-  .wrap{max-width:1320px;margin:0 auto}
+  .wrap{max-width:1640px;margin:0 auto}
 
   header{display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:14px;margin-bottom:22px}
   .tt{display:flex;align-items:center;gap:12px}
@@ -40,10 +40,8 @@
   .bar-i{width:4px;height:15px;border-radius:3px;background:var(--blue)}
   .card-head h2{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px;margin-right:8px}
 
-  /* tabs 独占一行，筛选控件第二行 */
-  .tabs{display:flex;gap:2px;background:#f0f0f3;border-radius:10px;padding:3px;flex-basis:100%;order:2}
-  .card-head h2{order:1}
-  .card-head .topn{order:3;margin-left:0}
+  /* tabs */
+  .tabs{display:flex;gap:2px;background:#f0f0f3;border-radius:10px;padding:3px}
   .tab{border:none;background:transparent;font-family:var(--sans);font-size:12.5px;font-weight:600;color:var(--sub);padding:5px 14px;border-radius:8px;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center}
   .tab.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
   .tab .hint{position:relative;display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;margin-left:3px;color:var(--sub2);cursor:help;font-size:11px;line-height:1}
