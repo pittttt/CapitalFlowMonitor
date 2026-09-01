@@ -40,7 +40,10 @@ jobs:
         run: python scripts/fetch_sectors.py
 
       # exit 3 = 资金流未结算（预期场景，07:10 那次跳过资金流，08:10 重试补齐）
+      # THS_COOKIE 用于板块详情页当日成交额抓取
       - name: Fetch history (incremental)
+        env:
+          THS_COOKIE: ${{ secrets.THS_COOKIE }}
         run: |
           python scripts/fetch_history.py
           code=$?

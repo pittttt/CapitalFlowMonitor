@@ -77,6 +77,38 @@ def fetch_ths_sector_flow():
     return out or None
 
 
+def fetch_ths_sector_amount(sectors):
+    """抓板块详情页当日成交额（q.10jqka.com.cn/thshy/detail/code/{code}/，带 cookie 绕过配额）。
+
+    返回 {板块名: 成交额(亿元)}；详情页数据当日实时，17:00 后为最终值。
+    """
+    cookie = os.environ.get("THS_COOKIE", "").strip()
+    if not cookie:
+        return {}
+    out = {}
+    for i, s in enumerate(sectors):
+        for attempt in range(3):
+            try:
+                sess = _ths_session("https://q.10jqka.com.cn/thshy/detail/code/%s/" % s["code"])
+                sess.headers["Cookie"] = cookie
+                r = sess.get("https://q.10jqka.com.cn/thshy/detail/code/%s/" % s["code"], timeout=25)
+                if r.status_code in (401, 403):
+                    raise RuntimeError("http %s" % r.status_code)
+                r.raise_for_status()
+                r.encoding = "gbk"
+                m = re.search(r"成交额\(亿\)</dt>\s*<dd[^>]*>([^<]+)</dd>", r.text)
+                if m:
+                    out[s["name"]] = float(m.group(1).strip())
+                break
+            except (Exception, OSError):  # noqa: BLE001
+                if attempt < 2:
+                    time.sleep(2 * (attempt + 1))
+        if (i + 1) % 20 == 0:
+            print("详情页成交额 [%d/%d]" % (i + 1, len(sectors)), flush=True)
+        time.sleep(0.3)
+    return out
+
+
 def load_json(path):
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as f:
@@ -298,6 +330,21 @@ def main():
         series_amount[s["name"]] = [
             round(amounts.get(d, 0) / 1e8, 1) if amounts.get(d) else None for d in dates
         ]
+    # 当日成交额无条件用板块详情页（q.10jqka.com.cn 当日实时，比 last.js 滞后数据及时）；
+    # 历史成交额保留 last.js 数据
+    try:
+        ths_amount = fetch_ths_sector_amount(sectors)
+        if ths_amount:
+            filled = 0
+            for nm in series_amount:
+                if nm in ths_amount:
+                    series_amount[nm][-1] = ths_amount[nm]
+                    filled += 1
+            print("当日成交额已用详情页覆盖 %d 个板块" % filled)
+        else:
+            print("[warn] 详情页成交额抓取失败（可能未配置 THS_COOKIE），当日保持 last.js 数据")
+    except Exception as e:  # noqa: BLE001
+        print("[warn] 详情页成交额抓取异常: %s" % e)
 
     # ---------- 3. 写输出 ----------
     payload = {
