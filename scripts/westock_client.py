@@ -186,6 +186,9 @@ def kline(codes, start_date, end_date):
                 tv = k.get("turnover_value")  # 成交额(元)
                 if tv is not None:
                     bar["amount"] = float(tv)
+                cp = k.get("change_pct")  # 涨跌幅(%)
+                if cp is not None:
+                    bar["change"] = float(cp)
                 bars.append(bar)
         bars.sort(key=lambda x: x["date"])
         out[code] = bars

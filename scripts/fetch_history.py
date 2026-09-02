@@ -309,6 +309,60 @@ def main():
             ths_last = new_day
             print("主力净流入已写入 %d 个板块 × %d 个交易日（全市场 %d 只）" % (len(code_to_sector), len(target_dates), len(all_codes)))
 
+    # ---------- 2d. 板块上涨家数占比（全市场 kline 当日涨跌统计，历史累积） ----------
+    # 与资金流同日计算：ths_last 已更新时执行；kline 批量上限 10，8 并发
+    up_old = (old_series.get("up_pct") or {}) if old else {}
+    up_old_by_date = {nm: dict(zip(old_dates, arr)) for nm, arr in up_old.items()}
+    series_up = {s["name"]: [up_old_by_date.get(s["name"], {}).get(d) for d in dates] for s in sectors}
+    if not args.no_flow and ths_last == new_day and series_up[sectors[0]["name"]][-1] is None:
+        print("统计全市场当日涨跌（上涨家数占比）...")
+        all_codes = sorted({c for s in sectors for c in s["constituents"]})
+        tencent_codes = [("sh" if c.startswith(("60", "68")) else "sz") + c for c in all_codes]
+        tc_to_code6 = {tc: c for tc, c in zip(tencent_codes, all_codes)}
+        code_to_sector = {}
+        for s in sectors:
+            for c in s["constituents"]:
+                code_to_sector[c] = s["name"]
+        batches = [tencent_codes[i:i + 10] for i in range(0, len(tencent_codes), 10)]
+
+        def fetch_k(batch):
+            try:
+                return kline(batch, new_day, new_day)
+            except Exception:  # noqa: BLE001
+                return {}
+
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        day_change = {}  # code6 -> change_pct
+        with ThreadPoolExecutor(max_workers=8) as ex:
+            futs = [ex.submit(fetch_k, b) for b in batches]
+            done = 0
+            for fut in as_completed(futs):
+                for code, bars in fut.result().items():
+                    # 仅取目标日数据（含 change_pct，直接算涨跌；防当日数据未出时错位）
+                    for bar in bars:
+                        if bar["date"] == new_day:
+                            day_change[code] = bar.get("change", bar.get("close"))
+                done += 1
+                if done % 100 == 0:
+                    print("涨跌统计 [%d/%d]" % (done, len(batches)), flush=True)
+        # 板块上涨占比（day_change 键为腾讯代码 sh/sz 前缀，映射回 6 位）
+        sector_stat = {}
+        for tc_code, chg in day_change.items():
+            nm = code_to_sector.get(tc_code[2:])
+            if not nm:
+                continue
+            st = sector_stat.setdefault(nm, {"up": 0, "total": 0})
+            st["total"] += 1
+            if chg is not None and chg > 0:
+                st["up"] += 1
+        idx = dates.index(new_day) if new_day in dates else -1
+        for nm in series_up:
+            st = sector_stat.get(nm)
+            if st and st["total"] > 0 and idx >= 0:
+                series_up[nm][idx] = round(st["up"] / st["total"] * 100, 1)
+        print("上涨家数占比已写入 %d 个板块（%s）" % (len(sector_stat), new_day))
+
     # ---------- 2b. 3日/5日主力净流入（滚动累计求和） ----------
     def rolling_sum(arr, n):
         out = []
@@ -405,6 +459,7 @@ def main():
             "netinflow3": series_flow3,
             "netinflow5": series_flow5,
             "amount": series_amount,
+            "up_pct": series_up,
         },
     }
     os.makedirs(os.path.dirname(HISTORY_FILE), exist_ok=True)

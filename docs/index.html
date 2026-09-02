@@ -311,6 +311,7 @@ function singleViewOption(name) {
   const fmtV = isFlow ? v => v == null ? "-" : v.toFixed(2) + "亿" : v => fmt(v) + "%";
   const chgArr = DATA.series.chg[name] || [];
   const amtArr = (DATA.series.amount && DATA.series.amount[name]) || [];
+  const upArr = (DATA.series.up_pct && DATA.series.up_pct[name]) || [];
   // borderRadius 不支持按值回调，拆分正负两个柱形系列（同位置重叠，各设圆角）
   const posArr = values.map(v => (v != null && v >= 0 ? v : null));
   const negArr = values.map(v => (v != null && v < 0 ? v : null));
@@ -340,6 +341,9 @@ function singleViewOption(name) {
         if (amtArr[di] != null) {
           html += "<br>成交额 <span style='font-family:var(--mono)'>" + amtArr[di].toFixed(0) + "亿</span>" +
             "　涨跌 <span style='font-family:var(--mono);color:" + (chgArr[di] >= 0 ? "#ff453a" : "#30d158") + "'>" + fmt(chgArr[di]) + "%</span>";
+        }
+        if (upArr[di] != null) {
+          html += "<br>上涨家数占比 <span style='font-family:var(--mono)'>" + upArr[di].toFixed(0) + "%</span>";
         }
         return html;
       },
