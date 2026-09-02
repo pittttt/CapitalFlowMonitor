@@ -384,8 +384,9 @@ def main():
         series_amount[s["name"]] = [
             round(amounts.get(d, 0) / 1e8, 1) if amounts.get(d) else None for d in dates
         ]
-    # 当日成交额优先用板块详情页（q.10jqka.com.cn 当日实时，比 last.js 滞后数据及时）；
-    # 历史成交额保留 last.js 数据；详情页失败/被限流的板块用腾讯成分股成交额求和兜底
+    # 当日成交额优先用板块详情页（q.10jqka.com.cn 当日实时，与 last.js 同源官方口径）；
+    # 历史成交额保留 last.js 数据；详情页失败时该板块当日缺失，last.js 更新后重跑/次日自动补齐
+    # （不使用腾讯成分股求和兜底——口径有差异，宁可缺失等官方数据）
     try:
         ths_amount = fetch_ths_sector_amount(sectors)
         if ths_amount:
@@ -395,48 +396,13 @@ def main():
                     series_amount[nm][-1] = ths_amount[nm]
                     filled += 1
             print("当日成交额已用详情页覆盖 %d 个板块" % filled)
+            missing = [s["name"] for s in sectors if series_amount[s["name"]][-1] is None]
+            if missing:
+                print("[warn] 仍有 %d 个板块当日成交额缺失（详情页抓取失败），last.js 更新后重跑自动补齐" % len(missing))
         else:
-            print("[warn] 详情页成交额抓取失败（可能未配置 THS_COOKIE/被限流），进入腾讯兜底")
+            print("[warn] 详情页成交额抓取失败（可能未配置 THS_COOKIE/被限流），当日缺失待 last.js 更新后补齐")
     except Exception as e:  # noqa: BLE001
         print("[warn] 详情页成交额抓取异常: %s" % e)
-
-    # 腾讯兜底：仍缺失的板块，用成分股当日成交额求和（kline turnover_value）
-    # 校验：腾讯返回的日期必须等于目标日（防当日数据未出时错位）
-    # 并发方式与主力流入 fund_flow_batch 一致（8 并发，kline 批量上限 10）
-    missing = [s for s in sectors if series_amount[s["name"]][-1] is None]
-    if missing:
-        print("仍缺 %d 个板块成交额，用腾讯成分股补齐..." % len(missing))
-        tencent_codes = []
-        tc_to_sector = {}
-        for s in missing:
-            for c in s["constituents"]:
-                tc = ("sh" if c.startswith(("60", "68")) else "sz") + c
-                tencent_codes.append(tc)
-                tc_to_sector[tc] = s["name"]
-
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-
-        batches = [tencent_codes[i:i + 10] for i in range(0, len(tencent_codes), 10)]
-
-        def fetch_batch(batch):
-            try:
-                return kline(batch, new_day, new_day)
-            except Exception:  # noqa: BLE001
-                return {}
-
-        with ThreadPoolExecutor(max_workers=8) as ex:
-            futs = [ex.submit(fetch_batch, b) for b in batches]
-            for fut in as_completed(futs):
-                kl = fut.result()
-                for code, bars in kl.items():
-                    # 仅接受目标日数据（日期校验，防腾讯当日数据未出时错位）
-                    if (bars and bars[0].get("date") == new_day
-                            and bars[0].get("amount") is not None and code in tc_to_sector):
-                        nm = tc_to_sector[code]
-                        cur = series_amount[nm][-1]
-                        series_amount[nm][-1] = (cur or 0) + round(bars[0]["amount"] / 1e8, 1)
-        filled_tc = sum(1 for s in missing if series_amount[s["name"]][-1] is not None)
-        print("腾讯成分股补齐 %d/%d 个板块" % (filled_tc, len(missing)))
 
     # ---------- 3. 写输出 ----------
     payload = {
