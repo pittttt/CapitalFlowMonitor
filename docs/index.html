@@ -359,7 +359,7 @@ function singleViewOption(name) {
       {
         name: name + " · " + TAB_LABEL[state.tab], type: "bar", yAxisIndex: 1, data: values,
         barMaxWidth: 22,
-        itemStyle: { color: p => p.value >= 0 ? "#ff3b30" : "#34c759", opacity: 0.82, borderRadius: [3, 3, 0, 0] },
+        itemStyle: { color: p => p.value >= 0 ? "#ff3b30" : "#34c759", opacity: 0.82, borderRadius: p => p.value >= 0 ? [3, 3, 0, 0] : [0, 0, 3, 3] },
         z: 2,
       },
       {
