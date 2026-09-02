@@ -176,13 +176,17 @@ def kline(codes, start_date, end_date):
     out = {}
     for i, item in enumerate(data.get("array") or []):
         # 腾讯返回的 array 项无 code 字段，按请求顺序对应
-        code = item.get("code") or (codes[i] if i < len(codes) else None)
+        code = item.get("code") or item.get("stock_code") or (codes[i] if i < len(codes) else None)
         bars = []
         for k in item.get("kline_data") or []:
             d = k.get("end_date")
             c = k.get("close_price")
             if d and c is not None:
-                bars.append({"date": d, "close": float(c)})
+                bar = {"date": d, "close": float(c)}
+                tv = k.get("turnover_value")  # 成交额(元)
+                if tv is not None:
+                    bar["amount"] = float(tv)
+                bars.append(bar)
         bars.sort(key=lambda x: x["date"])
         out[code] = bars
     return out
