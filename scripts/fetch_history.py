@@ -3,13 +3,14 @@
 
 维度：
 - 涨幅 / 5日涨幅：同花顺官方板块指数（881xxx 加权指数）日K，与同花顺页面完全一致
-- 主力净流入：东财全市场当日主力净流入（f62，与同花顺口径一致）按同花顺成分股聚合，每日累积
+- 主力净流入：腾讯个股主力净流入（MainNetFlow）按同花顺成分股求和，每日结算校验后累积
+- 上涨家数占比：当日=同花顺 realhead（38/37，收盘即更新）；历史=腾讯K线涨跌统计（--backfill-up 一次性回补）
 
 更新策略：
-- 板块指数每次全量重拉（90 次请求，接口返回最近 140 个交易日）
-- 主力净流入每日抓取累积（东财批量接口约 55 页，多域名轮换）
+- 板块指数/涨跌家数每次全量重拉（各 90 次请求，同花顺 d 域名免 cookie）
+- 主力净流入每日抓取累积，17:00 结算校验后写入
 
-用法：python scripts/fetch_history.py [--limit N] [--no-flow]
+用法：python scripts/fetch_history.py [--limit N] [--no-flow] [--full] [--backfill-up]
 """
 import argparse
 import datetime as dt
@@ -20,7 +21,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from westock_client import sector_kline, kline, fund_flow_batch, flow_settled, _ths_session  # noqa: E402
+from westock_client import sector_kline, sector_realhead, kline, fund_flow_batch, flow_settled, _ths_session  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SECTORS_FILE = os.path.join(ROOT, "data", "sectors.json")
@@ -75,6 +76,24 @@ def fetch_ths_sector_flow():
                 continue
             out[name] = {"net": net, "chg": chg}
     return out or None
+
+
+def fetch_sector_updown(sectors):
+    """抓同花顺板块实时涨跌家数（d.10jqka.com.cn realhead，收盘 15:00 即更新，免 cookie）。
+
+    返回 {板块名: {"date", "up", "down", "total", "chg"}}；失败板块跳过。
+    """
+    out = {}
+    for i, s in enumerate(sectors):
+        try:
+            d = sector_realhead(s["code"])
+            if d["total"] > 0:
+                out[s["name"]] = d
+        except Exception as e:  # noqa: BLE001
+            print("[warn] 板块涨跌家数 %s(%s) 拉取失败: %s" % (s["name"], s["code"], e), flush=True)
+        if (i + 1) % 20 == 0:
+            print("板块涨跌家数 [%d/%d]" % (i + 1, len(sectors)), flush=True)
+    return out
 
 
 def fetch_ths_sector_amount(sectors):
@@ -174,6 +193,7 @@ def main():
     ap.add_argument("--limit", type=int, default=0, help="仅处理前 N 个板块（调试用）")
     ap.add_argument("--no-flow", action="store_true", help="跳过主力净流入")
     ap.add_argument("--full", action="store_true", help="主力净流入全量重建（拉取窗口内全部交易日）")
+    ap.add_argument("--backfill-up", action="store_true", help="上涨家数占比历史全量回补（腾讯K线区间，一次性）")
     args = ap.parse_args()
 
     sectors_data = load_json(SECTORS_FILE)
@@ -226,6 +246,22 @@ def main():
     else:
         print("[warn] hyzjl 当日数据不完整（%s），涨幅保持 last.js 数据" % (len(ths_today) if ths_today else 0))
 
+    # realhead 当日涨跌幅兜底（d.10jqka.com.cn 收盘 15:00 即更新，与 last.js/hyzjl 同源同口径，免 cookie）：
+    # hyzjl 被限流/缺失时保证当日涨幅不丢；updown 同时供 1b 上涨家数占比使用
+    try:
+        updown = fetch_sector_updown(sectors)
+    except Exception as e:  # noqa: BLE001
+        updown = {}
+        print("[warn] 板块涨跌家数抓取异常: %s" % e, flush=True)
+    chg_filled = 0
+    if updown:
+        for nm, d in updown.items():
+            if d.get("date") == dates[-1] and d.get("chg") is not None and nm not in day_chg:
+                day_chg[nm] = {dates[-1]: round(d["chg"], 2)}
+                chg_filled += 1
+        if chg_filled:
+            print("当日涨跌幅已用 realhead 补齐 %d 个板块" % chg_filled)
+
     series_chg = {}
     series_chg3 = {}
     series_chg5 = {}
@@ -240,6 +276,76 @@ def main():
     missing = [s["name"] for s in sectors if series_chg[s["name"]][-1] is None]
     if missing:
         print("[warn] 以下板块缺少 %s 的涨幅数据: %s" % (dates[-1], "、".join(missing[:10])), flush=True)
+
+    # ---------- 1b. 板块上涨家数占比 ----------
+    # 口径：上涨占比 = 上涨家数 / 成分股总数（同花顺详情页同款分母，up+down 可不等于 total——差为平盘/停牌）
+    # - 最新交易日：同花顺 realhead（38/37），收盘 15:00 即更新，每次运行自动覆盖
+    # - 历史：腾讯K线涨跌统计，--backfill-up 一次性全量回补（个股涨跌符号与同花顺存在 ±1~2 只跨源误差）
+    up_old = (old_series.get("up_pct") or {}) if old else {}
+    up_old_by_date = {nm: dict(zip(old_dates, arr)) for nm, arr in up_old.items()}
+    series_up = {s["name"]: [up_old_by_date.get(s["name"], {}).get(d) for d in dates] for s in sectors}
+    cons_total = {s["name"]: len(s["constituents"]) for s in sectors}
+
+    if args.backfill_up:
+        print("全量回补上涨家数占比（腾讯K线区间 %s ~ %s，全市场 %d 只）..." % (dates[0], dates[-1], sum(cons_total.values())))
+        all_codes = sorted({c for s in sectors for c in s["constituents"]})
+        tencent_codes = [("sh" if c.startswith(("60", "68")) else "sz") + c for c in all_codes]
+        code_to_sector = {}
+        for s in sectors:
+            for c in s["constituents"]:
+                code_to_sector[c] = s["name"]
+        start = (dt.date.fromisoformat(dates[0]) - dt.timedelta(days=12)).isoformat()
+        end = dates[-1]
+        batches = [tencent_codes[i:i + 10] for i in range(0, len(tencent_codes), 10)]
+
+        def fetch_k(batch):
+            try:
+                return kline(batch, start, end)
+            except Exception:  # noqa: BLE001
+                return {}
+
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        day_up = {d: {} for d in dates}    # date -> {板块名: 上涨家数}
+        day_seen = {d: {} for d in dates}  # date -> {板块名: 有涨跌数据的股票数}（区分真0上涨与拉取失败）
+        done = 0
+        sw = time.time()
+        with ThreadPoolExecutor(max_workers=8) as ex:
+            futs = [ex.submit(fetch_k, b) for b in batches]
+            for fut in as_completed(futs):
+                for code, bars in fut.result().items():
+                    nm = code_to_sector.get(code[2:])
+                    if not nm:
+                        continue
+                    for bar in bars:
+                        d = bar["date"]
+                        if d in day_up and bar.get("change") is not None:
+                            day_seen[d][nm] = day_seen[d].get(nm, 0) + 1
+                            if bar["change"] > 0:
+                                day_up[d][nm] = day_up[d].get(nm, 0) + 1
+                done += 1
+                if done % 100 == 0:
+                    print("涨跌回补 [%d/%d] %.0fs" % (done, len(batches), time.time() - sw), flush=True)
+        for i, d in enumerate(dates):
+            for nm in series_up:
+                if day_seen[d].get(nm, 0) > 0:
+                    series_up[nm][i] = round(day_up[d].get(nm, 0) / cons_total[nm] * 100, 1)
+        print("回补完成，耗时 %.0fs" % (time.time() - sw), flush=True)
+
+    # 最新交易日用同花顺官方值覆盖（updown 已在段 1 拉取：realhead 38/37，收盘即结算）
+    if updown:
+        filled = 0
+        for nm in series_up:
+            d = updown.get(nm)
+            if d and d.get("date") == dates[-1] and d.get("total"):
+                series_up[nm][-1] = round(d["up"] / d["total"] * 100, 1)
+                filled += 1
+        print("当日上涨占比已用同花顺实时覆盖 %d 个板块（%s）" % (filled, dates[-1]))
+        if filled < len(sectors):
+            missing = [s["name"] for s in sectors if series_up[s["name"]][-1] is None]
+            print("[warn] 仍有 %d 个板块当日上涨占比缺失（realhead 抓取失败），下次运行自动重试: %s" % (len(missing), "、".join(missing[:10])), flush=True)
+    else:
+        print("[warn] 当日上涨占比未覆盖（realhead 抓取失败），历史值保留", flush=True)
 
     # ---------- 2. 主力净流入（腾讯 MainNetFlow 按同花顺成分股聚合，结算校验后写入） ----------
     series_flow = {}
@@ -309,60 +415,6 @@ def main():
             ths_last = new_day
             print("主力净流入已写入 %d 个板块 × %d 个交易日（全市场 %d 只）" % (len(code_to_sector), len(target_dates), len(all_codes)))
 
-    # ---------- 2d. 板块上涨家数占比（全市场 kline 当日涨跌统计，历史累积） ----------
-    # 与资金流同日计算：ths_last 已更新时执行；kline 批量上限 10，8 并发
-    up_old = (old_series.get("up_pct") or {}) if old else {}
-    up_old_by_date = {nm: dict(zip(old_dates, arr)) for nm, arr in up_old.items()}
-    series_up = {s["name"]: [up_old_by_date.get(s["name"], {}).get(d) for d in dates] for s in sectors}
-    if not args.no_flow and ths_last == new_day and series_up[sectors[0]["name"]][-1] is None:
-        print("统计全市场当日涨跌（上涨家数占比）...")
-        all_codes = sorted({c for s in sectors for c in s["constituents"]})
-        tencent_codes = [("sh" if c.startswith(("60", "68")) else "sz") + c for c in all_codes]
-        tc_to_code6 = {tc: c for tc, c in zip(tencent_codes, all_codes)}
-        code_to_sector = {}
-        for s in sectors:
-            for c in s["constituents"]:
-                code_to_sector[c] = s["name"]
-        batches = [tencent_codes[i:i + 10] for i in range(0, len(tencent_codes), 10)]
-
-        def fetch_k(batch):
-            try:
-                return kline(batch, new_day, new_day)
-            except Exception:  # noqa: BLE001
-                return {}
-
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-
-        day_change = {}  # code6 -> change_pct
-        with ThreadPoolExecutor(max_workers=8) as ex:
-            futs = [ex.submit(fetch_k, b) for b in batches]
-            done = 0
-            for fut in as_completed(futs):
-                for code, bars in fut.result().items():
-                    # 仅取目标日数据（含 change_pct，直接算涨跌；防当日数据未出时错位）
-                    for bar in bars:
-                        if bar["date"] == new_day:
-                            day_change[code] = bar.get("change", bar.get("close"))
-                done += 1
-                if done % 100 == 0:
-                    print("涨跌统计 [%d/%d]" % (done, len(batches)), flush=True)
-        # 板块上涨占比（day_change 键为腾讯代码 sh/sz 前缀，映射回 6 位）
-        sector_stat = {}
-        for tc_code, chg in day_change.items():
-            nm = code_to_sector.get(tc_code[2:])
-            if not nm:
-                continue
-            st = sector_stat.setdefault(nm, {"up": 0, "total": 0})
-            st["total"] += 1
-            if chg is not None and chg > 0:
-                st["up"] += 1
-        idx = dates.index(new_day) if new_day in dates else -1
-        for nm in series_up:
-            st = sector_stat.get(nm)
-            if st and st["total"] > 0 and idx >= 0:
-                series_up[nm][idx] = round(st["up"] / st["total"] * 100, 1)
-        print("上涨家数占比已写入 %d 个板块（%s）" % (len(sector_stat), new_day))
-
     # ---------- 2b. 3日/5日主力净流入（滚动累计求和） ----------
     def rolling_sum(arr, n):
         out = []
@@ -415,6 +467,7 @@ def main():
             "trade_dates_count": len(dates),
             "source": "板块指数:同花顺(10jqka) / 主力净流入:腾讯自选股(westock)个股主力净流入按同花顺成分股求和",
             "inflow_caliber": "主力净流入(腾讯口径,大单+超大单)按同花顺板块成分股求和；与同花顺逐笔算法有差异(板块级约14%)；每日07:10结算校验后写入",
+            "up_pct_caliber": "上涨家数占比=上涨家数/成分股总数(同花顺详情页口径)；最新交易日=同花顺实时(realhead)；历史=腾讯K线涨跌统计(与同花顺个股判定±1~2只差)",
         },
         "dates": dates,
         "series": {

@@ -143,6 +143,40 @@ def sector_kline(code):
     return {"name": name, "bars": bars}
 
 
+def sector_realhead(code):
+    """查询同花顺板块实时行情（收盘 15:00 即更新，无需 cookie）。
+
+    code: 同花顺板块代码，如 881166
+    返回: {"date": "YYYY-MM-DD", "name": 板块名, "close": 收盘点位,
+          "chg": 涨跌幅(%), "up": 上涨家数, "down": 下跌家数, "total": 成分股总数}
+    口径说明：up + down 可小于 total（差额为平盘/停牌）；上涨占比 = up / total。
+    """
+    url = "https://d.10jqka.com.cn/v6/realhead/bk_%s/last.js" % code
+    timeout = 15
+
+    def call():
+        s = _ths_session("https://q.10jqka.com.cn/")
+        r = s.get(url, timeout=timeout)
+        r.raise_for_status()
+        m = re.search(r"\((.*)\)\s*;?\s*$", r.text, re.S)
+        if not m:
+            raise RuntimeError("sector_realhead %s: 无法解析 JSONP" % code)
+        return json.loads(m.group(1))
+
+    d = _retry(call)
+    items = d.get("items") or {}
+    t = items.get("time", "")
+    return {
+        "date": t[:10] if len(t) >= 10 else "",
+        "name": d.get("name", ""),
+        "close": float(items["10"]) if items.get("10") else None,
+        "chg": float(items["199112"]) if items.get("199112") not in (None, "") else None,
+        "up": int(float(items["38"])) if items.get("38") else 0,
+        "down": int(float(items["39"])) if items.get("39") else 0,
+        "total": int(float(items["37"])) if items.get("37") else 0,
+    }
+
+
 def kline(codes, start_date, end_date):
     """查询日K线（含收盘价），腾讯网关 route=query_kline_data。
 
