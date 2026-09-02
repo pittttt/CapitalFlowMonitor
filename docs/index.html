@@ -430,9 +430,14 @@ function singleViewOption(name) {
         let html = "<b>" + DATA.dates[di] + "</b><br>" + name +
           "：排名 <span style='color:#ffd60a;font-family:var(--mono)'>#" + (rankArr[name][di] ?? "-") + "</span>" +
           "　" + TAB_LABEL[state.tab] + " <span style='font-family:var(--mono)'>" + fmtV(values[di]) + "</span>";
-        if (amtArr[di] != null) {
-          html += "<br>成交额 <span style='font-family:var(--mono)'>" + amtArr[di].toFixed(0) + "亿</span>" +
-            "　涨跌 <span style='font-family:var(--mono);color:" + (chgArr[di] >= 0 ? "#ff453a" : "#30d158") + "'>" + fmt(chgArr[di]) + "%</span>";
+        if (amtArr[di] != null || chgArr[di] != null) {   // 涨跌不依赖成交额：成交额缺失时当日涨跌仍显示
+          html += "<br>";
+          if (amtArr[di] != null) {
+            html += "成交额 <span style='font-family:var(--mono)'>" + amtArr[di].toFixed(0) + "亿</span>";
+          }
+          if (chgArr[di] != null) {
+            html += "　涨跌 <span style='font-family:var(--mono);color:" + (chgArr[di] >= 0 ? "#ff453a" : "#30d158") + "'>" + fmt(chgArr[di]) + "%</span>";
+          }
         }
         if (upArr[di] != null) {
           html += "<br>上涨家数占比 <span style='font-family:var(--mono)'>" + upArr[di].toFixed(0) + "%</span>";
