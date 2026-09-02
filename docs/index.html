@@ -311,6 +311,9 @@ function singleViewOption(name) {
   const fmtV = isFlow ? v => v == null ? "-" : v.toFixed(2) + "亿" : v => fmt(v) + "%";
   const chgArr = DATA.series.chg[name] || [];
   const amtArr = (DATA.series.amount && DATA.series.amount[name]) || [];
+  // borderRadius 不支持按值回调，拆分正负两个柱形系列（同位置重叠，各设圆角）
+  const posArr = values.map(v => (v != null && v >= 0 ? v : null));
+  const negArr = values.map(v => (v != null && v < 0 ? v : null));
 
   return {
     animation: false,
@@ -357,9 +360,15 @@ function singleViewOption(name) {
     series: [
       { name, type: "line", yAxisIndex: 0, data: rankArr[name], symbol: "none", lineStyle: { width: 2.2, color: "#0071e3" }, z: 3 },
       {
-        name: name + " · " + TAB_LABEL[state.tab], type: "bar", yAxisIndex: 1, data: values,
-        barMaxWidth: 22,
-        itemStyle: { color: p => p.value >= 0 ? "#ff3b30" : "#34c759", opacity: 0.82, borderRadius: p => p.value >= 0 ? [3, 3, 0, 0] : [0, 0, 3, 3] },
+        name: name + " · " + TAB_LABEL[state.tab], type: "bar", yAxisIndex: 1, data: posArr,
+        barMaxWidth: 22, barGap: "-100%",
+        itemStyle: { color: "#ff3b30", opacity: 0.82, borderRadius: [3, 3, 0, 0] },
+        z: 2,
+      },
+      {
+        name: name + " · " + TAB_LABEL[state.tab], type: "bar", yAxisIndex: 1, data: negArr,
+        barMaxWidth: 22, barGap: "-100%",
+        itemStyle: { color: "#34c759", opacity: 0.82, borderRadius: [0, 0, 3, 3] },
         z: 2,
       },
       {
