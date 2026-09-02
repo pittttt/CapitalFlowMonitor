@@ -315,8 +315,8 @@ function singleViewOption(name) {
   return {
     animation: false,
     grid: [
-      { top: 34, left: 136, right: 66, bottom: 120 },         // 主图（排名线+数值柱形，左侧容纳双轴）
-      { left: 136, right: 66, bottom: 66, height: 48 },       // 成交额小图（底部，主图下方留间距）
+      { top: 34, left: 136, right: 66, bottom: 124 },         // 主图（与全视图主图等高）
+      { left: 136, right: 66, bottom: 66, height: 48 },       // 成交额小图（主图下方紧贴）
     ],
     axisPointer: { link: [{ xAxisIndex: "all" }] },           // 竖线贯穿两图
     legend: {
@@ -382,6 +382,14 @@ function paletteOrder(name) {
 
 function render() {
   if (!DATA) return;
+
+  /* 单板块视图动态加高容器（主图保持全视图大小，成交额图用额外空间），图表视觉不变小 */
+  const needH = state.mode === "single" ? 730 : 700;
+  const dom = chart.getDom();
+  if (dom.offsetHeight !== needH) {
+    dom.style.height = needH + "px";
+    chart.resize();
+  }
   for (const t of ["chg", "chg3", "chg5", "netinflow", "netinflow3", "netinflow5"]) ranks[t] = calcRanks(t);
 
   /* tab 按钮 */
