@@ -79,6 +79,22 @@
 
   footer{margin-top:26px;text-align:center;font-size:11px;color:var(--sub2);line-height:1.7}
   footer b{color:var(--sub)}
+
+  /* 板块掘金 */
+  #goldCard{margin-top:18px}
+  .gold-hint{font-size:11px;color:var(--sub2);margin-left:auto;text-align:right;max-width:600px;line-height:1.6}
+  .gold-body{max-height:430px;overflow-y:auto;border:1px solid var(--line);border-radius:12px}
+  #goldTable{width:100%;border-collapse:collapse;font-size:12.5px}
+  #goldTable thead th{position:sticky;top:0;background:#f7f7f9;color:var(--sub);font-size:11px;font-weight:600;text-align:left;padding:8px 14px;border-bottom:1px solid var(--line);z-index:2}
+  #goldTable tbody td{padding:7px 14px;border-bottom:1px solid #f0f0f3;vertical-align:middle;white-space:nowrap}
+  #goldTable tbody tr:last-child td{border-bottom:none}
+  #goldTable tbody tr:hover{background:#fafafa}
+  .gold-name{color:var(--blue);cursor:pointer;font-weight:600}
+  .gold-name:hover{text-decoration:underline}
+  .gold-date{font-family:var(--mono);color:var(--sub);font-size:11.5px}
+  .gold-sig{color:var(--ink)}
+  .gold-sig b{font-family:var(--mono);font-weight:700;color:var(--up)}
+  .gold-empty{padding:26px;text-align:center;color:var(--sub2);font-size:12.5px}
 </style>
 </head>
 <body>
@@ -134,6 +150,22 @@
     <div id="chart"></div>
     <div class="hint" id="hint">点击下方图例中的板块名，可查看该板块的排名曲线与具体数值；再次点击或点「返回全部板块」回到全视图 · 拖动底部滑块选择时间窗口</div>
   </div>
+
+  <section class="card" id="goldCard">
+    <div class="card-head">
+      <h2><span class="bar-i"></span>板块掘金</h2>
+      <span class="gold-hint">前一日 3日跌幅扩大（chg3 更弱）且缩量 → 当日放量≥50%上涨、3日涨幅板块排名提前≥30、3日主力净流入为正。点击板块名查看走势，命中日在单板块图中标红箭头</span>
+    </div>
+    <div class="gold-body">
+      <table id="goldTable">
+        <thead>
+          <tr><th style="width:16%">板块名</th><th style="width:13%">触发日期</th><th>信号</th></tr>
+        </thead>
+        <tbody id="goldTbody"></tbody>
+      </table>
+      <div id="goldEmpty" class="gold-empty" hidden>暂无符合条件的信号</div>
+    </div>
+  </section>
 
   <footer>
     数据来源：<b>同花顺行业板块分类及板块指数（10jqka）</b> + <b>腾讯自选股行情（westock-data）</b>，每日收盘后由 GitHub Actions 自动更新。
@@ -245,6 +277,65 @@ function latestOrder(tab) {
     .map(e => e.n);
 }
 
+/* ============ 板块掘金 ============ */
+let gold = [];            // 掘金信号，最新在前
+const goldBySector = {};  // 板块名 -> 命中日期数组（升序，供箭头/tooltip）
+
+function buildGold() {
+  gold = (DATA.signals || []).slice().reverse();
+  for (const k in goldBySector) delete goldBySector[k];
+  for (const sg of gold) (goldBySector[sg.name] = goldBySector[sg.name] || []).push(sg.date);
+}
+
+function renderGold() {
+  if (!DATA) return;
+  buildGold();
+  const empty = document.getElementById("goldEmpty");
+  empty.hidden = gold.length > 0;
+  document.getElementById("goldTbody").innerHTML = gold.map(sg =>
+    "<tr><td><span class='gold-name' data-n='" + sg.name + "'>" + sg.name + "</span></td>" +
+    "<td class='gold-date'>" + sg.date + "</td>" +
+    "<td class='gold-sig'>成交额放量 <b>" + sg.vol + "%</b>　｜　3日涨幅排名上升 <b>" + sg.rank_up + "</b>　｜　3日主力流入 <b>" + sg.inflow3 + "亿</b></td></tr>"
+  ).join("");
+}
+
+/* 单板块视图命中日红箭头：graphic 像素叠加（不修改任何轴/系列配置，不改变现有图表数据计算） */
+function applyGoldArrows() {
+  if (!DATA || !chart || state.mode !== "single" || !state.singleName) return;
+  const idxs = (goldBySector[state.singleName] || [])
+    .map(d => DATA.dates.indexOf(d)).filter(i => i >= 0);
+  if (!idxs.length) { chart.setOption({ graphic: [] }, false); return; }
+  let ext = null, yBottom = null;
+  try {
+    const ya = chart.getModel().getComponent("yAxis", 1);
+    const axis = ya && ya.axis;
+    if (axis && axis.scale) {
+      ext = axis.scale.getExtent();   // 主图数值轴（柱形轴）数据范围
+      yBottom = chart.convertToPixel({ yAxisIndex: 1 }, ext[0]);
+    }
+  } catch (e) { /* 保持 null 则跳过箭头 */ }
+  const elems = [];
+  for (const di of idxs) {
+    let x = null;
+    try { x = chart.convertToPixel({ xAxisIndex: 0 }, DATA.dates[di]); } catch (e) {}
+    if (x == null || x < 120 || x > chart.getWidth() - 72) continue;   // dataZoom 窗口外不画
+    let y;
+    if (ext && ext[0] <= 0 && ext[1] >= 0) y = chart.convertToPixel({ yAxisIndex: 1 }, 0);  // 0 线即柱底
+    else if (yBottom != null) y = yBottom;                                                   // 轴不含 0：贴轴底部
+    else continue;
+    y = Math.min(y, chart.getHeight() - 122 - 14);  // 不越出主图 grid 底部
+    elems.push({
+      id: "goldArrow_" + di,
+      type: "polygon",
+      position: [x, y + 7],
+      shape: { points: [[-5, -7], [5, -7], [0, 3]] },  // 三角尖朝下，整体位于 0 线（柱底）下方
+      style: { fill: "#ff3b30" },
+      silent: true, z: 100,
+    });
+  }
+  chart.setOption({ graphic: elems }, false);
+}
+
 /* ============ 图表渲染 ============ */
 const ranks = {};   // tab -> 板块 -> 排名数组
 
@@ -312,6 +403,7 @@ function singleViewOption(name) {
   const chgArr = DATA.series.chg[name] || [];
   const amtArr = (DATA.series.amount && DATA.series.amount[name]) || [];
   const upArr = (DATA.series.up_pct && DATA.series.up_pct[name]) || [];
+  const goldSet = new Set(goldBySector[name] || []);   // 掘金命中日期（tooltip 追加趋势买入）
   // borderRadius 不支持按值回调，拆分正负两个柱形系列（同位置重叠，各设圆角）
   const posArr = values.map(v => (v != null && v >= 0 ? v : null));
   const negArr = values.map(v => (v != null && v < 0 ? v : null));
@@ -344,6 +436,9 @@ function singleViewOption(name) {
         }
         if (upArr[di] != null) {
           html += "<br>上涨家数占比 <span style='font-family:var(--mono)'>" + upArr[di].toFixed(0) + "%</span>";
+        }
+        if (goldSet.has(DATA.dates[di])) {
+          html += "<br><span style='color:#ff453a;font-weight:700'>▲ 趋势买入</span>";
         }
         return html;
       },
@@ -441,6 +536,8 @@ function render() {
     "最后更新 " + DATA.meta.updated_at.slice(5, 16).replace(" ", " ") + " · 交易日 " + DATA.dates[0] + " ~ " + DATA.dates[DATA.dates.length - 1];
 
   chart.setOption(state.mode === "single" ? singleViewOption(state.singleName) : allViewOption(), true);
+  renderGold();
+  applyGoldArrows();
 }
 
 /* ============ 交互 ============ */
@@ -523,7 +620,18 @@ chart.on("legendselectchanged", function (params) {
   render();
 });
 
-window.addEventListener("resize", () => chart.resize());
+/* 掘金表格点击板块名 → 历史模块单板块视图 + 平滑滚动回顶部卡片 */
+document.getElementById("goldTbody").addEventListener("click", e => {
+  const nm = e.target.closest(".gold-name");
+  if (!nm) return;
+  pickSector(nm.dataset.n);
+  document.querySelector(".card").scrollIntoView({ behavior: "smooth", block: "start" });
+});
+
+/* dataZoom 拖动后重算箭头像素位置；窗口缩放后同样重算 */
+chart.on("datazoom", () => applyGoldArrows());
+window.addEventListener("resize", () => { chart.resize(); applyGoldArrows(); });
+
 loadAll().catch(err => {
   document.getElementById("lastUpd").textContent = "数据加载失败：" + err.message;
 });

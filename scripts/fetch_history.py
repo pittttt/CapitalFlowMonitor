@@ -456,6 +456,43 @@ def main():
     except Exception as e:  # noqa: BLE001
         print("[warn] 详情页成交额抓取异常: %s" % e)
 
+    # ---------- 2d. 板块掘金信号 ----------
+    # 发掘"缩量回调后放量启动"：T-1 3日跌幅扩大（chg3[T-1] < chg3[T-2] < 0）且较 T-2 缩量；
+    # T 当日放量≥50%且上涨，3日涨幅全板块名次（1=最高）较 T-1 提前≥30，3日主力流入为正
+    signals = []
+    if len(dates) >= 3 and series_chg3 and series_flow3 and series_amount:
+        names = [s["name"] for s in sectors]
+        day_rank = {}
+        for i, d in enumerate(dates):
+            order = sorted(
+                names,
+                key=lambda nm: (series_chg3[nm][i] is None, -(series_chg3[nm][i] or 0)),
+            )  # None 排最后；稳定排序，同值保持板块原序
+            day_rank[d] = {nm: r + 1 for r, nm in enumerate(order)}
+        for i in range(2, len(dates)):
+            d = dates[i]
+            for nm in names:
+                c3_0, c3_1, c3_2 = series_chg3[nm][i], series_chg3[nm][i - 1], series_chg3[nm][i - 2]
+                a_1, a_2, a_0 = series_amount[nm][i - 1], series_amount[nm][i - 2], series_amount[nm][i]
+                c0, f3 = series_chg[nm][i], series_flow3[nm][i]
+                if None in (c3_0, c3_1, c3_2, a_1, a_2, a_0, c0, f3):
+                    continue
+                r_prev, r_cur = day_rank[dates[i - 1]][nm], day_rank[d][nm]
+                if c3_1 < c3_2 < 0 and a_1 < a_2 and a_0 >= 1.5 * a_1 and c0 > 0 and f3 > 0 and r_prev - r_cur >= 30:
+                    signals.append({
+                        "name": nm, "date": d,
+                        "vol": int(round((a_0 / a_1 - 1) * 100)),
+                        "rank_up": r_prev - r_cur,
+                        "inflow3": round(f3, 2),
+                    })
+        print("板块掘金信号 %d 条" % len(signals))
+        if signals:
+            last_s = signals[-1]
+            print("  最新: %s %s 放量%d%% 名次提前%d 3日主力+%.2f亿" % (
+                last_s["name"], last_s["date"], last_s["vol"], last_s["rank_up"], last_s["inflow3"]))
+    else:
+        print("[warn] 数据不足，跳过板块掘金信号")
+
     # ---------- 3. 写输出 ----------
     payload = {
         "meta": {
@@ -480,6 +517,7 @@ def main():
             "amount": series_amount,
             "up_pct": series_up,
         },
+        "signals": signals,
     }
     os.makedirs(os.path.dirname(HISTORY_FILE), exist_ok=True)
     with open(HISTORY_FILE, "w", encoding="utf-8") as f:
