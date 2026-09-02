@@ -55,7 +55,7 @@ def fetch_ths_sector_flow():
                 break
             except (Exception, OSError):  # noqa: BLE001
                 if attempt < 4:
-                    time.sleep(3 * (attempt + 1))
+                    time.sleep(5 * (attempt + 1))
                 else:
                     r = None
         if r is None:
@@ -102,10 +102,10 @@ def fetch_ths_sector_amount(sectors):
                 break
             except (Exception, OSError):  # noqa: BLE001
                 if attempt < 2:
-                    time.sleep(2 * (attempt + 1))
+                    time.sleep(5 * (attempt + 1))   # 限流规避：失败后拉长等待
         if (i + 1) % 20 == 0:
             print("详情页成交额 [%d/%d]" % (i + 1, len(sectors)), flush=True)
-        time.sleep(0.3)
+        time.sleep(1.0)   # 板块间 1 秒间隔，避免 q 域名连续请求限流
     return out
 
 
