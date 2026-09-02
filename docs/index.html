@@ -323,12 +323,12 @@ function applyGoldArrows() {
     if (ext && ext[0] <= 0 && ext[1] >= 0) y = chart.convertToPixel({ yAxisIndex: 1 }, 0);  // 0 线即柱底
     else if (yBottom != null) y = yBottom;                                                   // 轴不含 0：贴轴底部
     else continue;
-    y = Math.min(y, chart.getHeight() - 122 - 14);  // 不越出主图 grid 底部
+    y = Math.min(y, chart.getHeight() - 122 - 24);  // 不越出主图 grid 底部
     elems.push({
       id: "goldArrow_" + di,
       type: "polygon",
-      position: [x, y + 7],
-      shape: { points: [[-5, -7], [5, -7], [0, 3]] },  // 三角尖朝下，整体位于 0 线（柱底）下方
+      position: [x, y + 16],
+      shape: { points: [[-5, 7], [5, 7], [0, -3]] },  // 三角尖朝上（买入方向），整体在柱底下方留出间距
       style: { fill: "#ff3b30" },
       silent: true, z: 100,
     });
@@ -458,8 +458,9 @@ function singleViewOption(name) {
       { type: "value", gridIndex: 1, show: false },
     ],
     dataZoom: [
-      { type: "slider", bottom: 8, height: 18, left: 136, right: 66, borderColor: "#e6e6ea", backgroundColor: "#f7f7f9", fillerColor: "rgba(0,113,227,.12)", textStyle: { color: "#86868b", fontSize: 10 } },
-      { type: "inside" },
+      // 需同时作用于两个 x 轴（主图 + 成交额小图），否则缩放时成交额图错位
+      { type: "slider", xAxisIndex: [0, 1], bottom: 8, height: 18, left: 136, right: 66, borderColor: "#e6e6ea", backgroundColor: "#f7f7f9", fillerColor: "rgba(0,113,227,.12)", textStyle: { color: "#86868b", fontSize: 10 } },
+      { type: "inside", xAxisIndex: [0, 1] },
     ],
     series: [
       { name, type: "line", yAxisIndex: 0, data: rankArr[name], symbol: "none", lineStyle: { width: 2.2, color: "#0071e3" }, z: 3 },
