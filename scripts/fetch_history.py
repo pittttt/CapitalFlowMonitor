@@ -105,7 +105,7 @@ def fetch_ths_sector_amount(sectors):
                     time.sleep(5 * (attempt + 1))   # 限流规避：失败后拉长等待
         if (i + 1) % 20 == 0:
             print("详情页成交额 [%d/%d]" % (i + 1, len(sectors)), flush=True)
-        time.sleep(1.0)   # 板块间 1 秒间隔，避免 q 域名连续请求限流
+        time.sleep(5.0)   # 板块间 5 秒间隔，避免 q 域名连续请求限流
     return out
 
 
