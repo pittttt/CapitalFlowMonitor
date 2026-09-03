@@ -440,19 +440,24 @@ def main():
     # 历史成交额保留 last.js 数据；详情页失败时该板块当日缺失，last.js 更新后重跑/次日自动补齐
     # （不使用腾讯成分股求和兜底——口径有差异，宁可缺失等官方数据）
     try:
-        ths_amount = fetch_ths_sector_amount(sectors)
-        if ths_amount:
-            filled = 0
-            for nm in series_amount:
-                if nm in ths_amount:
-                    series_amount[nm][-1] = ths_amount[nm]
-                    filled += 1
-            print("当日成交额已用详情页覆盖 %d 个板块" % filled)
-            missing = [s["name"] for s in sectors if series_amount[s["name"]][-1] is None]
-            if missing:
-                print("[warn] 仍有 %d 个板块当日成交额缺失（详情页抓取失败），last.js 更新后重跑自动补齐" % len(missing))
+        miss_sectors = [s for s in sectors if series_amount[s["name"]][-1] is None]
+        if not miss_sectors:
+            print("当日成交额 %d 板块已齐全（last.js 已更新），跳过详情页抓取" % len(sectors))
         else:
-            print("[warn] 详情页成交额抓取失败（可能未配置 THS_COOKIE/被限流），当日缺失待 last.js 更新后补齐")
+            print("当日成交额缺失 %d 个板块，详情页补齐（5s/板块节流）..." % len(miss_sectors))
+            ths_amount = fetch_ths_sector_amount(miss_sectors)
+            if ths_amount:
+                filled = 0
+                for nm in series_amount:
+                    if nm in ths_amount:
+                        series_amount[nm][-1] = ths_amount[nm]
+                        filled += 1
+                print("当日成交额已用详情页覆盖 %d 个板块" % filled)
+                still_missing = [s["name"] for s in sectors if series_amount[s["name"]][-1] is None]
+                if still_missing:
+                    print("[warn] 仍有 %d 个板块当日成交额缺失（详情页抓取失败），last.js 更新后重跑自动补齐" % len(still_missing))
+            else:
+                print("[warn] 详情页成交额抓取失败（可能未配置 THS_COOKIE/被限流），当日缺失待 last.js 更新后补齐")
     except Exception as e:  # noqa: BLE001
         print("[warn] 详情页成交额抓取异常: %s" % e)
 
