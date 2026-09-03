@@ -600,7 +600,8 @@ function applyGoldArrows() {
       });
     }
   }
-  chart.setOption({ graphic: elems }, false);
+  // replaceMerge 整体替换 graphic：窗口缩放后应消失的旧箭头会被移除（普通 merge 只增/改不删）
+  chart.setOption({ graphic: elems }, { replaceMerge: ["graphic"] });
 }
 
 /* ============ 图表渲染 ============ */
