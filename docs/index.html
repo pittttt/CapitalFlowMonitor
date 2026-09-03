@@ -420,6 +420,10 @@ function ruleDesc(r) {
 /* 核心：按规则快照扫描全部板块×日期，返回命中 [{name,date,txt}]（date 升序）。
    任一参与值为 null 则该板块该日跳过；全部勾选规则同时满足才命中。 */
 function computeHits(r) {
+  // 归一规则结构：兼容早期缓存策略（缺新规则字段时按 off + 默认参数处理）
+  const RD = { r1: { on: false, x: 3, y: 1 }, r2: { on: false, x: 1 }, r3: { on: false, x: 1, y: 30 },
+               r4: { on: false, x: 3, y: 30 }, r5: { on: false, x: 3, y: 0 }, r6: { on: false, y: 0 } };
+  for (const k in RD) r[k] = Object.assign({}, RD[k], r[k] || {});
   const S = DATA.series, dates = DATA.dates, N = dates.length;
   const names = Object.keys(S.chg);
   let i0 = 0;
