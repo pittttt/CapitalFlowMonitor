@@ -94,6 +94,7 @@
   .pol{border:1px solid var(--line);border-radius:12px;padding:10px 14px 10px;margin-bottom:10px;background:#fff}
   .pol-head{display:flex;align-items:center;gap:10px;margin-bottom:2px}
   .pol-name{font-size:13.5px;font-weight:700;display:inline-flex;align-items:center;gap:6px}
+  .pol-count{font-size:10.5px;font-weight:600;color:var(--sub);background:#f0f0f3;border-radius:999px;padding:1px 8px;font-family:var(--mono);white-space:nowrap}
   .pol-name .dot{width:9px;height:9px;border-radius:50%;display:inline-block}
   .pol-show{margin-left:auto;display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--sub);cursor:pointer;user-select:none}
   .pol-show input{accent-color:var(--blue);cursor:pointer}
@@ -553,7 +554,8 @@ function renderPolicies() {
           ? "<div class='gold-none'>板块「" + selF + "」在此策略无命中记录</div>"
           : "<table class='gold-tbl'><thead><tr><th style='width:16%'>板块名</th><th style='width:13%'>触发日期</th><th>信号</th></tr></thead><tbody>" + rows + "</tbody></table>");
     return "<div class='pol' data-id='" + p.id + "'><div class='pol-head'>" +
-      "<b class='pol-name'><span class='dot' style='background:" + color + "'></span>" + p.name + "</b>" +
+      "<b class='pol-name'><span class='dot' style='background:" + color + "'></span>" + p.name +
+      "<span class='pol-count'>" + hits.length + " 条信号</span></b>" +
       "<label class='pol-show'><input type='checkbox' class='polChk'" + (p.show ? " checked" : "") + "> 在图展示</label>" +
       "<button class='pol-del'>删除</button></div>" +
       "<div class='pol-desc'>" + p.desc + "</div>" +
