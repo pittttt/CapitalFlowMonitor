@@ -610,17 +610,26 @@ function allViewOption() {
       backgroundColor: "rgba(29,29,31,.94)", borderWidth: 0, textStyle: { color: "#fff", fontSize: 11.5 },
       formatter: function (params) {
         const di = params[0].dataIndex;
-        const rows = params
-          .map(p => ({ n: p.seriesName, r: p.value }))
-          .sort((a, b) => (a.r == null ? 1 : 0) - (b.r == null ? 1 : 0) || a.r - b.r)
-          .slice(0, 12);
-        let html = "<b>" + DATA.dates[di] + "</b>";
-        for (const r of rows) {
-          html += "<br><span style='display:inline-block;width:10px;height:10px;border-radius:2px;background:" +
-            paletteOrder(r.n) + ";margin-right:5px'></span>" + r.n +
-            " <span style='float:right;font-family:var(--mono);color:#ffd60a'>#" + (r.r == null ? "-" : r.r) + "</span>";
+        // 基于当前视图板块集合（TopN + 图例勾选）完整渲染；当日无数据的板块排末尾显示 #-
+        const rows = showNames
+          .filter(n => selected[n])
+          .map(n => ({ n, r: rankArr[n][di] }))
+          .sort((a, b) => (a.r == null ? 1 : 0) - (b.r == null ? 1 : 0) || a.r - b.r);
+        // 每列固定 20 个竖排（满 20 换列，最后一列可不满；90→5列、50→3列、20→1列）
+        const perCol = 20;
+        const colN = Math.max(1, Math.ceil(rows.length / perCol));
+        let html = "<b>" + DATA.dates[di] + "</b>　共 " + rows.length + " 个板块<div style='margin-top:6px'>";
+        for (let c = 0; c < colN; c++) {
+          const seg = rows.slice(c * perCol, (c + 1) * perCol);
+          if (!seg.length) continue;
+          html += "<div style='display:inline-block;vertical-align:top;line-height:2;margin-right:18px'>" +
+            seg.map(r =>
+              "<span style='display:inline-block;width:9px;height:9px;border-radius:2px;background:" +
+              paletteOrder(r.n) + ";margin-right:5px'></span>" + r.n +
+              " <span style='font-family:var(--mono);color:#ffd60a'>#" + (r.r == null ? "-" : r.r) + "</span>"
+            ).join("<br>") + "</div>";
         }
-        return html;
+        return html + "</div>";
       },
     },
     xAxis: { type: "category", data: DATA.dates, boundaryGap: false, axisLine: { lineStyle: { color: "#d2d2d7" } }, axisLabel: { fontSize: 10.5, color: "#86868b" } },
