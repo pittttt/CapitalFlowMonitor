@@ -192,6 +192,7 @@
       </div>
       <div class="rule">
         <input type="checkbox" class="rOn" id="r2On" checked>
+        <span class="rlabel">T-1日（包含）前</span>
         <span class="rlabel">连续</span>
         <select id="r2x">
           <option value="1" selected>1</option><option value="2">2</option><option value="3">3</option>
@@ -202,6 +203,7 @@
       </div>
       <div class="rule">
         <input type="checkbox" class="rOn" id="r3On" checked>
+        <span class="rlabel">T日（包含）前</span>
         <span class="rlabel">连续</span>
         <select id="r3x">
           <option value="1" selected>1</option><option value="2">2</option><option value="3">3</option>
@@ -235,6 +237,13 @@
         <input type="number" id="r5y" value="0" step="0.1">
         <span class="rlabel">亿元</span>
         <i class="tip-i">ⓘ<span class="tip">当日 x日主力净流入（滚动累计）≥ y 亿元</span></i>
+      </div>
+      <div class="rule">
+        <input type="checkbox" class="rOn" id="r6On" checked>
+        <span class="rlabel">T日涨幅 &gt;</span>
+        <input type="number" id="r6y" value="0" step="0.1">
+        <span class="rlabel">%</span>
+        <i class="tip-i">ⓘ<span class="tip">当日涨幅 &gt; x%（T 日单日涨幅严格大于阈值，旧口径"当日上涨"即 x=0）</span></i>
       </div>
     </div>
     <div id="polWrap"></div>
@@ -388,8 +397,9 @@ function readRules() {
     r3: { on: g("r3On").checked, x: parseInt(g("r3x").value, 10), y: Math.min(500, Math.max(1, num("r3y", 30))) },
     r4: { on: g("r4On").checked, x: parseInt(g("r4x").value, 10), y: Math.max(1, num("r4y", 30)) },
     r5: { on: g("r5On").checked, x: parseInt(g("r5x").value, 10), y: num("r5y", 0) },
+    r6: { on: g("r6On").checked, y: num("r6y", 0) },
   };
-  rules.any = rules.r1.on || rules.r2.on || rules.r3.on || rules.r4.on || rules.r5.on;
+  rules.any = rules.r1.on || rules.r2.on || rules.r3.on || rules.r4.on || rules.r5.on || rules.r6.on;
   return rules;
 }
 function refreshGenBtn() {
@@ -403,6 +413,7 @@ function ruleDesc(r) {
   if (r.r3.on) parts.push((r.r3.x === 1 ? "当日" : "连续" + r.r3.x + "日") + "成交额放量≥" + r.r3.y + "%");
   if (r.r4.on) parts.push(r.r4.x + "日涨幅排名上升≥" + r.r4.y);
   if (r.r5.on) parts.push(r.r5.x + "日主力流入≥" + r.r5.y + "亿");
+  if (r.r6.on) parts.push("当日涨幅>" + r.r6.y + "%");
   return parts.join(" · ");
 }
 
@@ -447,6 +458,10 @@ function computeHits(r) {
       if (ok && r.r5.on) {
         const f = S[FLOW_OF_X[r.r5.x]][nm], v = f[i];
         if (v == null || v < r.r5.y) { ok = false; } else { parts.push(r.r5.x + "日主力流入 " + v.toFixed(2) + "亿"); }
+      }
+      if (ok && r.r6.on) {   // T 日单日涨幅严格大于阈值
+        const v = S.chg[nm][i];
+        if (v == null || v <= r.r6.y) { ok = false; } else { parts.push("当日涨幅 " + v.toFixed(2) + "%"); }
       }
       if (ok) hits.push({ name: nm, date: dates[i], txt: parts.join(" ｜ ") });
     }
@@ -862,7 +877,7 @@ document.getElementById("genBtn").addEventListener("click", genPolicy);
 document.getElementById("rulesPanel").addEventListener("change", refreshGenBtn);
 document.getElementById("rulesPanel").addEventListener("blur", e => {   // 数字框失焦回填默认
   if (e.target.matches('input[type="number"]') && e.target.value === "") {
-    const dft = { r3y: "30", r4y: "30", r5y: "0" }[e.target.id];
+    const dft = { r3y: "30", r4y: "30", r5y: "0", r6y: "0" }[e.target.id];
     if (dft !== undefined) e.target.value = dft;
     refreshGenBtn();
   }
