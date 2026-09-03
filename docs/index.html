@@ -100,6 +100,19 @@
   .pol-del{font-size:11.5px;color:#ff453a;background:#fff;border:1px solid #ffd0cc;border-radius:999px;padding:3px 11px;cursor:pointer;font-weight:600}
   .pol-del:hover{background:#fff0ef}
   .pol-desc{font-size:11px;color:var(--sub2);margin-bottom:7px}
+  .pol-filter{margin:0 0 8px}
+  .pf-box{position:relative;width:300px;max-width:100%}
+  .pf-input{width:100%;font-family:var(--sans);font-size:12px;padding:4px 28px 4px 10px;border:1px solid var(--line);border-radius:8px;outline:none;background:#fff;color:var(--ink)}
+  .pf-input:focus{border-color:var(--blue)}
+  .pf-clear{position:absolute;right:5px;top:50%;transform:translateY(-50%);display:none;align-items:center;justify-content:center;width:17px;height:17px;border:none;background:#e3e3e8;color:#fff;font-size:11px;line-height:1;cursor:pointer;border-radius:50%;font-weight:700}
+  .pf-clear:hover{background:var(--sub2)}
+  .pf-clear.show{display:inline-flex}
+  .pf-drop{display:none;position:absolute;top:calc(100% + 4px);left:0;width:300px;max-height:240px;overflow-y:auto;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:30}
+  .pf-drop.show{display:block}
+  .pf-drop .item{padding:5px 12px;font-size:12px;cursor:pointer;display:flex;justify-content:space-between;gap:8px}
+  .pf-drop .item:hover{background:#f0f7ff}
+  .pf-drop .item.on{background:#e8f2fd;font-weight:600}
+  .pf-drop .item .cnt{font-family:var(--mono);font-size:10.5px;color:var(--sub2)}
   .pol-body{max-height:240px;overflow-y:auto;border:1px solid var(--line);border-radius:10px}
   .gold-tbl{width:100%;border-collapse:collapse;font-size:12.5px}
   .gold-tbl thead th{position:sticky;top:0;background:#f7f7f9;color:var(--sub);font-size:11px;font-weight:600;text-align:left;padding:6px 12px;border-bottom:1px solid var(--line);z-index:2}
@@ -364,6 +377,7 @@ function latestOrder(tab) {
 const LS_KEY = "cfm_policies_v1";
 const STRAT_COLORS = ["#ff3b30", "#bf5af2", "#ff9f0a", "#00b8d9", "#ff6482", "#30d158", "#8e8e93", "#5e5ce6"];
 let policies = [];        // 持久化：{id,name,rules,desc,show}；hits 为派生值随最新数据实时重算
+const polFilter = {};     // 策略表格板块筛选：id -> 板块名（空为不过滤，UI 状态不持久化）
 let polCache = [];        // [{pol, hits:[{name,date,txt}]}] —— 与 DATA 同源的重算结果
 let sigMap = {};          // 板块名 -> {日期 -> [策略id]}（仅 show 策略，箭头/tooltip 使用）
 let hitsSig = "";         // DATA 指纹，变化才重算 hits
@@ -528,18 +542,26 @@ function renderPolicies() {
     const c = polCache.find(x => x.pol.id === p.id);
     const hits = c ? c.hits : [];
     const color = stratColor(p.id);
-    const rows = hits.slice().reverse().map(h =>
+    const selF = polFilter[p.id] || "";
+    const shown = selF ? hits.filter(h => h.name === selF) : hits;
+    const rows = shown.slice().reverse().map(h =>
       "<tr><td><span class='gold-name' data-n='" + h.name + "'>" + h.name + "</span></td>" +
       "<td class='gold-date'>" + h.date + "</td><td class='gold-sig'>" + sigHtml(h.txt, color) + "</td></tr>").join("");
+    const body = hits.length === 0
+      ? "<div class='gold-none'>该规则组合在窗口内无命中</div>"
+      : (shown.length === 0
+          ? "<div class='gold-none'>板块「" + selF + "」在此策略无命中记录</div>"
+          : "<table class='gold-tbl'><thead><tr><th style='width:16%'>板块名</th><th style='width:13%'>触发日期</th><th>信号</th></tr></thead><tbody>" + rows + "</tbody></table>");
     return "<div class='pol' data-id='" + p.id + "'><div class='pol-head'>" +
       "<b class='pol-name'><span class='dot' style='background:" + color + "'></span>" + p.name + "</b>" +
       "<label class='pol-show'><input type='checkbox' class='polChk'" + (p.show ? " checked" : "") + "> 在图展示</label>" +
       "<button class='pol-del'>删除</button></div>" +
-      "<div class='pol-desc'>" + p.desc + "</div><div class='pol-body'>" +
-      (hits.length
-        ? "<table class='gold-tbl'><thead><tr><th style='width:16%'>板块名</th><th style='width:13%'>触发日期</th><th>信号</th></tr></thead><tbody>" + rows + "</tbody></table>"
-        : "<div class='gold-none'>该规则组合在窗口内无命中</div>") +
-      "</div></div>";
+      "<div class='pol-desc'>" + p.desc + "</div>" +
+      "<div class='pol-filter'><div class='pf-box'>" +
+      "<input class='pf-input' value='" + selF + "' placeholder='筛选板块…' autocomplete='off'>" +
+      "<button class='pf-clear" + (selF ? " show" : "") + "' title='清除筛选'>×</button>" +
+      "<div class='pf-drop'></div></div></div>" +
+      "<div class='pol-body'>" + body + "</div></div>";
   }).join("");
 }
 
@@ -923,6 +945,53 @@ document.getElementById("polWrap").addEventListener("change", e => {
   savePolicies();
   renderPolicies();   // 更新 sigMap（show 集合）
   render();           // 刷新箭头
+});
+
+/* ---- 策略表格板块筛选（候选下拉，含匹配，× 重置） ---- */
+function openPfDrop(polEl, q) {
+  const drop = polEl.querySelector(".pf-drop");
+  const id = polEl.dataset.id;
+  const cache = polCache.find(c => c.pol.id === id);
+  const hits = cache ? cache.hits : [];
+  const cnt = {};
+  for (const h of hits) cnt[h.name] = (cnt[h.name] || 0) + 1;
+  let names = Object.keys(cnt);
+  if (q) names = names.filter(n => n.indexOf(q) >= 0);
+  names.sort((a, b) => (cnt[b] - cnt[a]) || a.localeCompare(b, "zh"));
+  const sel = polFilter[id] || "";
+  drop.innerHTML = names.length
+    ? names.map(n =>
+        "<div class='item" + (n === sel ? " on" : "") + "' data-n='" + n + "'><span>" + n +
+        "</span><span class='cnt'>" + cnt[n] + " 条</span></div>").join("")
+    : "<div class='item' style='color:var(--sub2);cursor:default'>无匹配板块</div>";
+  drop.classList.add("show");
+}
+
+document.getElementById("polWrap").addEventListener("input", e => {
+  if (!e.target.classList.contains("pf-input")) return;
+  openPfDrop(e.target.closest(".pol"), e.target.value.trim());
+});
+document.getElementById("polWrap").addEventListener("focusin", e => {
+  if (e.target.classList.contains("pf-input")) openPfDrop(e.target.closest(".pol"), e.target.value.trim());
+});
+document.getElementById("polWrap").addEventListener("click", e => {
+  const item = e.target.closest(".pf-drop .item");
+  if (item && item.dataset.n) {
+    const pol = e.target.closest(".pol");
+    polFilter[pol.dataset.id] = item.dataset.n;
+    renderPolicies();
+    return;
+  }
+  const clr = e.target.closest(".pf-clear");
+  if (clr) {
+    delete polFilter[clr.closest(".pol").dataset.id];
+    renderPolicies();
+  }
+});
+document.addEventListener("click", e => {
+  document.querySelectorAll(".pf-drop.show").forEach(d => {
+    if (!e.target.closest(".pol-filter") || !d.closest(".pol-filter").contains(e.target)) d.classList.remove("show");
+  });
 });
 
 /* dataZoom 拖动后重算箭头像素位置；窗口缩放后同样重算 */
