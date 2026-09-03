@@ -80,21 +80,39 @@
   footer{margin-top:26px;text-align:center;font-size:11px;color:var(--sub2);line-height:1.7}
   footer b{color:var(--sub)}
 
-  /* 板块掘金 */
+  /* 板块掘金 · 策略引擎 */
   #goldCard{margin-top:18px}
-  .gold-hint{font-size:11px;color:var(--sub2);margin-left:auto;text-align:right;max-width:600px;line-height:1.6}
-  .gold-body{max-height:430px;overflow-y:auto;border:1px solid var(--line);border-radius:12px}
-  #goldTable{width:100%;border-collapse:collapse;font-size:12.5px}
-  #goldTable thead th{position:sticky;top:0;background:#f7f7f9;color:var(--sub);font-size:11px;font-weight:600;text-align:left;padding:8px 14px;border-bottom:1px solid var(--line);z-index:2}
-  #goldTable tbody td{padding:7px 14px;border-bottom:1px solid #f0f0f3;vertical-align:middle;white-space:nowrap}
-  #goldTable tbody tr:last-child td{border-bottom:none}
-  #goldTable tbody tr:hover{background:#fafafa}
+  .rules{background:#f7f7f9;border:1px solid var(--line);border-radius:12px;padding:4px 14px;margin-bottom:12px}
+  .rule{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink);padding:5px 0;border-bottom:1px dashed #e7e7ea}
+  .rule:last-child{border-bottom:none}
+  .rule .rOn{accent-color:var(--blue);width:14px;height:14px;cursor:pointer;flex:none}
+  .rule select{font-family:var(--sans);font-size:12px;border:1px solid var(--line);border-radius:6px;padding:2px 4px;background:#fff;color:var(--ink)}
+  .rule input[type=number]{width:60px;font-family:var(--mono);font-size:12px;border:1px solid var(--line);border-radius:6px;padding:2px 6px;background:#fff;color:var(--ink)}
+  .rule .tip-i{position:relative;display:inline-flex;margin-left:auto;color:var(--sub2);cursor:help;font-size:12px;flex:none}
+  .rule .tip-i .tip{position:absolute;bottom:160%;right:0;background:rgba(29,29,31,.94);color:#fff;font-size:11px;font-weight:400;padding:8px 11px;border-radius:9px;width:300px;line-height:1.5;opacity:0;pointer-events:none;transition:opacity .12s;z-index:20;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+  .rule .tip-i:hover .tip{opacity:1}
+  .pol{border:1px solid var(--line);border-radius:12px;padding:10px 14px 10px;margin-bottom:10px;background:#fff}
+  .pol-head{display:flex;align-items:center;gap:10px;margin-bottom:2px}
+  .pol-name{font-size:13.5px;font-weight:700;display:inline-flex;align-items:center;gap:6px}
+  .pol-name .dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+  .pol-show{margin-left:auto;display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--sub);cursor:pointer;user-select:none}
+  .pol-show input{accent-color:var(--blue);cursor:pointer}
+  .pol-del{font-size:11.5px;color:#ff453a;background:#fff;border:1px solid #ffd0cc;border-radius:999px;padding:3px 11px;cursor:pointer;font-weight:600}
+  .pol-del:hover{background:#fff0ef}
+  .pol-desc{font-size:11px;color:var(--sub2);margin-bottom:7px}
+  .pol-body{max-height:240px;overflow-y:auto;border:1px solid var(--line);border-radius:10px}
+  .gold-tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+  .gold-tbl thead th{position:sticky;top:0;background:#f7f7f9;color:var(--sub);font-size:11px;font-weight:600;text-align:left;padding:6px 12px;border-bottom:1px solid var(--line);z-index:2}
+  .gold-tbl tbody td{padding:6px 12px;border-bottom:1px solid #f0f0f3;vertical-align:middle;white-space:nowrap}
+  .gold-tbl tbody tr:last-child td{border-bottom:none}
+  .gold-tbl tbody tr:hover{background:#fafafa}
   .gold-name{color:var(--blue);cursor:pointer;font-weight:600}
   .gold-name:hover{text-decoration:underline}
   .gold-date{font-family:var(--mono);color:var(--sub);font-size:11.5px}
   .gold-sig{color:var(--ink)}
-  .gold-sig b{font-family:var(--mono);font-weight:700;color:var(--up)}
+  .gold-sig b{font-family:var(--mono);font-weight:700}
   .gold-empty{padding:26px;text-align:center;color:var(--sub2);font-size:12.5px}
+  .gold-none{padding:16px;text-align:center;color:var(--sub2);font-size:12px}
 </style>
 </head>
 <body>
@@ -153,18 +171,74 @@
 
   <section class="card" id="goldCard">
     <div class="card-head">
-      <h2><span class="bar-i"></span>板块掘金</h2>
-      <span class="gold-hint">前一日 3日跌幅扩大（chg3 更弱）且缩量 → 当日放量≥50%上涨、3日涨幅板块排名提前≥30、3日主力净流入为正。点击板块名查看走势，命中日在单板块图中标红箭头</span>
+      <h2><span class="bar-i"></span>板块掘金 · 策略引擎</h2>
+      <button class="btn" id="genBtn" disabled>⚡ 生成信号</button>
     </div>
-    <div class="gold-body">
-      <table id="goldTable">
-        <thead>
-          <tr><th style="width:16%">板块名</th><th style="width:13%">触发日期</th><th>信号</th></tr>
-        </thead>
-        <tbody id="goldTbody"></tbody>
-      </table>
-      <div id="goldEmpty" class="gold-empty" hidden>暂无符合条件的信号</div>
+    <div class="rules" id="rulesPanel">
+      <div class="rule">
+        <input type="checkbox" class="rOn" id="r1On" checked>
+        <select id="r1x">
+          <option value="1">1日</option>
+          <option value="3" selected>3日</option>
+          <option value="5">5日</option>
+        </select>
+        <span class="rlabel">跌幅连续扩大</span>
+        <select id="r1y">
+          <option value="1" selected>1</option><option value="2">2</option><option value="3">3</option>
+          <option value="4">4</option><option value="5">5</option>
+        </select>
+        <span class="rlabel">天</span>
+        <i class="tip-i">ⓘ<span class="tip">T-1 日（含 T-1）起向前计算：连续 y 天 x日涨幅为负且逐日加深（负得越来越多）。例：y=1 即 T-2、T-1 两天 x日涨幅都为负且 T-1 更负</span></i>
+      </div>
+      <div class="rule">
+        <input type="checkbox" class="rOn" id="r2On" checked>
+        <span class="rlabel">连续</span>
+        <select id="r2x">
+          <option value="1" selected>1</option><option value="2">2</option><option value="3">3</option>
+          <option value="4">4</option><option value="5">5</option>
+        </select>
+        <span class="rlabel">日成交额缩小</span>
+        <i class="tip-i">ⓘ<span class="tip">T-1 日（含 T-1）起向前计算：连续 x 日成交额逐日缩量（每天较前一日更小）</span></i>
+      </div>
+      <div class="rule">
+        <input type="checkbox" class="rOn" id="r3On" checked>
+        <span class="rlabel">连续</span>
+        <select id="r3x">
+          <option value="1" selected>1</option><option value="2">2</option><option value="3">3</option>
+          <option value="4">4</option><option value="5">5</option>
+        </select>
+        <span class="rlabel">日成交额放大</span>
+        <input type="number" id="r3y" value="30" min="1" max="500" step="1">
+        <span class="rlabel">%</span>
+        <i class="tip-i">ⓘ<span class="tip">T 日（含 T）起向前计算：连续 x 日成交额逐日较前一日放大 ≥y%</span></i>
+      </div>
+      <div class="rule">
+        <input type="checkbox" class="rOn" id="r4On" checked>
+        <select id="r4x">
+          <option value="1">1日</option>
+          <option value="3" selected>3日</option>
+          <option value="5">5日</option>
+        </select>
+        <span class="rlabel">涨幅板块排名提前</span>
+        <input type="number" id="r4y" value="30" min="1" step="1">
+        <span class="rlabel">名</span>
+        <i class="tip-i">ⓘ<span class="tip">板块 x日涨幅的全市场名次（1=最高）当日较前一日前进 ≥y 名（名次数值减小）</span></i>
+      </div>
+      <div class="rule">
+        <input type="checkbox" class="rOn" id="r5On" checked>
+        <select id="r5x">
+          <option value="1">1日</option>
+          <option value="3" selected>3日</option>
+          <option value="5">5日</option>
+        </select>
+        <span class="rlabel">主力净流入 ≥</span>
+        <input type="number" id="r5y" value="0" step="0.1">
+        <span class="rlabel">亿元</span>
+        <i class="tip-i">ⓘ<span class="tip">当日 x日主力净流入（滚动累计）≥ y 亿元</span></i>
+      </div>
     </div>
+    <div id="polWrap"></div>
+    <div id="polEmpty" class="gold-empty" hidden>勾选上方规则后点击「⚡ 生成信号」创建策略（规则与结果保存在本机缓存，可创建多条并勾选展示于上方图表）</div>
   </section>
 
   <footer>
@@ -277,61 +351,216 @@ function latestOrder(tab) {
     .map(e => e.n);
 }
 
-/* ============ 板块掘金 ============ */
-let gold = [];            // 掘金信号，最新在前
-const goldBySector = {};  // 板块名 -> 命中日期数组（升序，供箭头/tooltip）
+/* ============ 板块掘金 · 策略引擎（前端计算 + localStorage 缓存） ============ */
+const LS_KEY = "cfm_policies_v1";
+const STRAT_COLORS = ["#ff3b30", "#bf5af2", "#ff9f0a", "#00b8d9", "#ff6482", "#30d158", "#8e8e93", "#5e5ce6"];
+let policies = [];        // 持久化：{id,name,rules,desc,show}；hits 为派生值随最新数据实时重算
+let polCache = [];        // [{pol, hits:[{name,date,txt}]}] —— 与 DATA 同源的重算结果
+let sigMap = {};          // 板块名 -> {日期 -> [策略id]}（仅 show 策略，箭头/tooltip 使用）
+let hitsSig = "";         // DATA 指纹，变化才重算 hits
+const CHG_OF_X = { 1: "chg", 3: "chg3", 5: "chg5" };
+const FLOW_OF_X = { 1: "netinflow", 3: "netinflow3", 5: "netinflow5" };
 
-function buildGold() {
-  gold = (DATA.signals || []).slice().reverse();
-  for (const k in goldBySector) delete goldBySector[k];
-  for (const sg of gold) (goldBySector[sg.name] = goldBySector[sg.name] || []).push(sg.date);
+function stratColor(id) { return STRAT_COLORS[(id.charCodeAt(0) - 65) % STRAT_COLORS.length]; }
+function polName(id) { return "策略" + id; }
+
+function loadPolicies() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    policies = Array.isArray(arr) ? arr.filter(p => p && p.id && p.rules) : [];
+    policies.sort((a, b) => a.id < b.id ? -1 : 1);
+  } catch (e) { policies = []; }
+}
+function savePolicies() {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify(policies.map(p => ({ id: p.id, name: p.name, rules: p.rules, desc: p.desc, show: p.show }))));
+  } catch (e) { /* 存储满/不可用则忽略 */ }
 }
 
-function renderGold() {
+/* 从规则面板读取勾选与参数；y 非法时回默认 */
+function readRules() {
+  const g = id => document.getElementById(id);
+  const num = (id, dft) => { const v = parseFloat(g(id).value); return isNaN(v) ? dft : v; };
+  const rules = {
+    r1: { on: g("r1On").checked, x: parseInt(g("r1x").value, 10), y: parseInt(g("r1y").value, 10) },
+    r2: { on: g("r2On").checked, x: parseInt(g("r2x").value, 10) },
+    r3: { on: g("r3On").checked, x: parseInt(g("r3x").value, 10), y: Math.min(500, Math.max(1, num("r3y", 30))) },
+    r4: { on: g("r4On").checked, x: parseInt(g("r4x").value, 10), y: Math.max(1, num("r4y", 30)) },
+    r5: { on: g("r5On").checked, x: parseInt(g("r5x").value, 10), y: num("r5y", 0) },
+  };
+  rules.any = rules.r1.on || rules.r2.on || rules.r3.on || rules.r4.on || rules.r5.on;
+  return rules;
+}
+function refreshGenBtn() {
+  document.getElementById("genBtn").disabled = !readRules().any;
+}
+
+function ruleDesc(r) {
+  const parts = [];
+  if (r.r1.on) parts.push(r.r1.x + "日跌幅连续扩大" + r.r1.y + "天");
+  if (r.r2.on) parts.push("连续" + r.r2.x + "日缩量");
+  if (r.r3.on) parts.push("连续" + r.r3.x + "日成交额放大≥" + r.r3.y + "%");
+  if (r.r4.on) parts.push(r.r4.x + "日涨幅排名提前≥" + r.r4.y + "名");
+  if (r.r5.on) parts.push(r.r5.x + "日主力净流入≥" + r.r5.y + "亿");
+  return parts.join(" · ");
+}
+
+/* 核心：按规则快照扫描全部板块×日期，返回命中 [{name,date,txt}]（date 升序）。
+   任一参与值为 null 则该板块该日跳过；全部勾选规则同时满足才命中。 */
+function computeHits(r) {
+  const S = DATA.series, dates = DATA.dates, N = dates.length;
+  const names = Object.keys(S.chg);
+  let i0 = 0;
+  if (r.r1.on) i0 = Math.max(i0, r.r1.y + 1);
+  if (r.r2.on) i0 = Math.max(i0, r.r2.x + 1);
+  if (r.r3.on) i0 = Math.max(i0, r.r3.x);
+  if (r.r4.on) i0 = Math.max(i0, 1);
+  const hits = [];
+  for (let i = i0; i < N; i++) {
+    for (const nm of names) {
+      const parts = [];
+      let ok = true;
+      if (r.r1.on) {   // v[i-1-y..i-1] 递减且首个 <0（递减+首负 ⇒ 全负且负得更多）
+        const v = S[CHG_OF_X[r.r1.x]][nm], k0 = i - 1 - r.r1.y;
+        let bad = v[k0] == null || v[k0] >= 0;
+        for (let k = k0 + 1; !bad && k <= i - 1; k++) if (v[k] == null || v[k] >= v[k - 1]) bad = true;
+        if (bad) { ok = false; } else { parts.push(r.r1.x + "日跌幅连续扩大" + r.r1.y + "天"); }
+      }
+      if (ok && r.r2.on) {   // a[i-1-x..i-1] 逐对严格下降
+        const a = S.amount[nm], k0 = i - 1 - r.r2.x;
+        let bad = false;
+        for (let k = k0 + 1; k <= i - 1; k++) if (a[k] == null || a[k - 1] == null || a[k] >= a[k - 1]) { bad = true; break; }
+        if (bad) { ok = false; } else { parts.push("连续" + r.r2.x + "日缩量"); }
+      }
+      if (ok && r.r3.on) {   // a[i-x..i] 逐对放大 ≥1+y/100
+        const a = S.amount[nm], mul = 1 + r.r3.y / 100;
+        let bad = false;
+        for (let k = i - r.r3.x + 1; k <= i; k++) if (a[k] == null || a[k - 1] == null || a[k] < a[k - 1] * mul) { bad = true; break; }
+        if (bad) { ok = false; } else { parts.push("成交额放大 " + Math.round((a[i] / a[i - 1] - 1) * 100) + "%"); }
+      }
+      if (ok && r.r4.on) {   // 名次提前（1=最高）
+        const ra = ranks[CHG_OF_X[r.r4.x]][nm];
+        const rp = ra[i - 1], rc = ra[i];
+        if (rp == null || rc == null || rp - rc < r.r4.y) { ok = false; } else { parts.push("排名提前 " + (rp - rc) + "名"); }
+      }
+      if (ok && r.r5.on) {
+        const f = S[FLOW_OF_X[r.r5.x]][nm], v = f[i];
+        if (v == null || v < r.r5.y) { ok = false; } else { parts.push("主力净流入 " + v.toFixed(2) + "亿"); }
+      }
+      if (ok) hits.push({ name: nm, date: dates[i], txt: parts.join(" ｜ ") });
+    }
+  }
+  return hits;
+}
+
+/* 数据/策略变化后重建计算缓存与索引：
+   DATA 或策略规则集未变时复用 hits，仅重建 sigMap（show 勾选不影响 hits） */
+function refreshSignals() {
   if (!DATA) return;
-  buildGold();
-  const empty = document.getElementById("goldEmpty");
-  empty.hidden = gold.length > 0;
-  document.getElementById("goldTbody").innerHTML = gold.map(sg =>
-    "<tr><td><span class='gold-name' data-n='" + sg.name + "'>" + sg.name + "</span></td>" +
-    "<td class='gold-date'>" + sg.date + "</td>" +
-    "<td class='gold-sig'>成交额放量 <b>" + sg.vol + "%</b>　｜　3日涨幅排名上升 <b>" + sg.rank_up + "</b>　｜　3日主力流入 <b>" + sg.inflow3 + "亿</b></td></tr>"
-  ).join("");
+  const sig = (DATA.meta && DATA.meta.updated_at) + "|" + DATA.dates[0] + "|" + DATA.dates[DATA.dates.length - 1] +
+    "|" + policies.map(p => p.id + JSON.stringify(p.rules)).join("|");
+  if (sig !== hitsSig) {
+    polCache = policies.map(p => ({ pol: p, hits: computeHits(p.rules) }));
+    hitsSig = sig;
+  }
+  sigMap = {};
+  for (const c of polCache) {
+    if (!c.pol.show) continue;
+    for (const h of c.hits) {
+      const m = sigMap[h.name] = sigMap[h.name] || {};
+      (m[h.date] = m[h.date] || []).push(c.pol.id);
+    }
+  }
+  for (const nm in sigMap) for (const d in sigMap[nm]) sigMap[nm][d].sort();
 }
 
-/* 单板块视图命中日红箭头：graphic 像素叠加（不修改任何轴/系列配置，不改变现有图表数据计算） */
+function nextPolicyId() {
+  const used = new Set(policies.map(p => p.id));
+  for (let c = 65; c <= 90; c++) { const ch = String.fromCharCode(c); if (!used.has(ch)) return ch; }
+  return "Z";
+}
+
+function genPolicy() {
+  const rules = readRules();
+  if (!rules.any) return;
+  const id = nextPolicyId();
+  policies.push({ id, name: polName(id), rules, desc: ruleDesc(rules), show: true });
+  policies.sort((a, b) => a.id < b.id ? -1 : 1);
+  savePolicies();
+  const n = computeHits(rules).length;
+  renderPolicies();
+  render();
+  const btn = document.getElementById("genBtn");
+  btn.textContent = "✓ " + polName(id) + " 已生成 (" + n + " 条)";
+  setTimeout(() => (btn.textContent = "⚡ 生成信号"), 2200);
+}
+
+function sigHtml(txt, color) {
+  return txt.replace(/(\d+(?:\.\d+)?)/g, m => "<b style='color:" + color + "'>" + m + "</b>");
+}
+
+function renderPolicies() {
+  if (!DATA) return;
+  refreshSignals();
+  const wrap = document.getElementById("polWrap");
+  document.getElementById("polEmpty").hidden = policies.length > 0;
+  wrap.innerHTML = policies.map(p => {
+    const c = polCache.find(x => x.pol.id === p.id);
+    const hits = c ? c.hits : [];
+    const color = stratColor(p.id);
+    const rows = hits.slice().reverse().map(h =>
+      "<tr><td><span class='gold-name' data-n='" + h.name + "'>" + h.name + "</span></td>" +
+      "<td class='gold-date'>" + h.date + "</td><td class='gold-sig'>" + sigHtml(h.txt, color) + "</td></tr>").join("");
+    return "<div class='pol' data-id='" + p.id + "'><div class='pol-head'>" +
+      "<b class='pol-name'><span class='dot' style='background:" + color + "'></span>" + p.name + "</b>" +
+      "<label class='pol-show'><input type='checkbox' class='polChk'" + (p.show ? " checked" : "") + "> 在图展示</label>" +
+      "<button class='pol-del'>删除</button></div>" +
+      "<div class='pol-desc'>" + p.desc + "</div><div class='pol-body'>" +
+      (hits.length
+        ? "<table class='gold-tbl'><thead><tr><th style='width:16%'>板块名</th><th style='width:13%'>触发日期</th><th>信号</th></tr></thead><tbody>" + rows + "</tbody></table>"
+        : "<div class='gold-none'>该规则组合在窗口内无命中</div>") +
+      "</div></div>";
+  }).join("");
+}
+
+/* 单板块视图命中日箭头：graphic 像素叠加（不改轴/系列配置）；勾选策略同日纵向多箭头、每策略一色 */
 function applyGoldArrows() {
   if (!DATA || !chart || state.mode !== "single" || !state.singleName) return;
-  const idxs = (goldBySector[state.singleName] || [])
-    .map(d => DATA.dates.indexOf(d)).filter(i => i >= 0);
-  if (!idxs.length) { chart.setOption({ graphic: [] }, false); return; }
+  const nm = state.singleName;
+  const byDate = sigMap[nm];
+  if (!byDate) { chart.setOption({ graphic: [] }, false); return; }
   let ext = null, yBottom = null;
   try {
     const ya = chart.getModel().getComponent("yAxis", 1);
     const axis = ya && ya.axis;
-    if (axis && axis.scale) {
-      ext = axis.scale.getExtent();   // 主图数值轴（柱形轴）数据范围
-      yBottom = chart.convertToPixel({ yAxisIndex: 1 }, ext[0]);
-    }
-  } catch (e) { /* 保持 null 则跳过箭头 */ }
+    if (axis && axis.scale) { ext = axis.scale.getExtent(); yBottom = chart.convertToPixel({ yAxisIndex: 1 }, ext[0]); }
+  } catch (e) { /* 跳过箭头 */ }
+  const gridBottom = Math.min(yBottom != null ? yBottom : Infinity, chart.getHeight() - 122 - 24);
   const elems = [];
-  for (const di of idxs) {
+  for (const dateStr in byDate) {
+    const di = DATA.dates.indexOf(dateStr);
+    if (di < 0) continue;
     let x = null;
-    try { x = chart.convertToPixel({ xAxisIndex: 0 }, DATA.dates[di]); } catch (e) {}
-    if (x == null || x < 120 || x > chart.getWidth() - 72) continue;   // dataZoom 窗口外不画
-    let y;
-    if (ext && ext[0] <= 0 && ext[1] >= 0) y = chart.convertToPixel({ yAxisIndex: 1 }, 0);  // 0 线即柱底
-    else if (yBottom != null) y = yBottom;                                                   // 轴不含 0：贴轴底部
+    try { x = chart.convertToPixel({ xAxisIndex: 0 }, dateStr); } catch (e) {}
+    if (x == null || x < 120 || x > chart.getWidth() - 72) continue;
+    let yBase;
+    if (ext && ext[0] <= 0 && ext[1] >= 0) yBase = chart.convertToPixel({ yAxisIndex: 1 }, 0);  // 0 线即柱底
+    else if (yBottom != null) yBase = yBottom;
     else continue;
-    y = Math.min(y, chart.getHeight() - 122 - 24);  // 不越出主图 grid 底部
-    elems.push({
-      id: "goldArrow_" + di,
-      type: "polygon",
-      position: [x, y + 9],
-      shape: { points: [[-5, 7], [5, 7], [0, -3]] },  // 三角尖朝上（买入方向），整体在柱底下方留出间距
-      style: { fill: "#ff3b30" },
-      silent: true, z: 100,
-    });
+    const space = gridBottom - yBase - 12;
+    const maxN = space > 0 ? Math.min(byDate[dateStr].length, Math.floor(space / 11) + 1) : 1;
+    for (let j = 0; j < maxN; j++) {
+      const pid = byDate[dateStr][j];
+      elems.push({
+        id: "goldArrow_" + di + "_" + pid,
+        type: "polygon",
+        position: [x, yBase + 9 + j * 11],
+        shape: { points: [[-5, 7], [5, 7], [0, -3]] },  // 尖朝上；多箭头按策略字母序纵向排列
+        style: { fill: stratColor(pid) },
+        silent: true, z: 100,
+      });
+    }
   }
   chart.setOption({ graphic: elems }, false);
 }
@@ -403,7 +632,6 @@ function singleViewOption(name) {
   const chgArr = DATA.series.chg[name] || [];
   const amtArr = (DATA.series.amount && DATA.series.amount[name]) || [];
   const upArr = (DATA.series.up_pct && DATA.series.up_pct[name]) || [];
-  const goldSet = new Set(goldBySector[name] || []);   // 掘金命中日期（tooltip 追加趋势买入）
   // borderRadius 不支持按值回调，拆分正负两个柱形系列（同位置重叠，各设圆角）
   const posArr = values.map(v => (v != null && v >= 0 ? v : null));
   const negArr = values.map(v => (v != null && v < 0 ? v : null));
@@ -442,8 +670,11 @@ function singleViewOption(name) {
         if (upArr[di] != null) {
           html += "<br>上涨家数占比 <span style='font-family:var(--mono)'>" + upArr[di].toFixed(0) + "%</span>";
         }
-        if (goldSet.has(DATA.dates[di])) {
-          html += "<br><span style='color:#ff453a;font-weight:700'>▲ 趋势买入</span>";
+        const sigs = sigMap[name] && sigMap[name][DATA.dates[di]];
+        if (sigs && sigs.length) {
+          for (const pid of sigs) {
+            html += "<br><span style='color:" + stratColor(pid) + ";font-weight:700'>▲ " + polName(pid) + " 趋势买入</span>";
+          }
         }
         return html;
       },
@@ -542,7 +773,7 @@ function render() {
     "最后更新 " + DATA.meta.updated_at.slice(5, 16).replace(" ", " ") + " · 交易日 " + DATA.dates[0] + " ~ " + DATA.dates[DATA.dates.length - 1];
 
   chart.setOption(state.mode === "single" ? singleViewOption(state.singleName) : allViewOption(), true);
-  renderGold();
+  renderPolicies();
   applyGoldArrows();
 }
 
@@ -626,18 +857,52 @@ chart.on("legendselectchanged", function (params) {
   render();
 });
 
-/* 掘金表格点击板块名 → 历史模块单板块视图 + 平滑滚动回顶部卡片 */
-document.getElementById("goldTbody").addEventListener("click", e => {
-  const nm = e.target.closest(".gold-name");
-  if (!nm) return;
-  pickSector(nm.dataset.n);
-  document.querySelector(".card").scrollIntoView({ behavior: "smooth", block: "start" });
+/* ============ 策略引擎交互 ============ */
+document.getElementById("genBtn").addEventListener("click", genPolicy);
+document.getElementById("rulesPanel").addEventListener("change", refreshGenBtn);
+document.getElementById("rulesPanel").addEventListener("blur", e => {   // 数字框失焦回填默认
+  if (e.target.matches('input[type="number"]') && e.target.value === "") {
+    const dft = { r3y: "30", r4y: "30", r5y: "0" }[e.target.id];
+    if (dft !== undefined) e.target.value = dft;
+    refreshGenBtn();
+  }
+}, true);
+
+document.getElementById("polWrap").addEventListener("click", e => {
+  const del = e.target.closest(".pol-del");
+  if (del) {
+    const id = del.closest(".pol").dataset.id;
+    const p = policies.find(x => x.id === id);
+    if (p && confirm("确定删除" + p.name + "？其规则与信号将从本机缓存移除")) {
+      policies = policies.filter(x => x.id !== id);
+      savePolicies();
+      renderPolicies();
+      render();
+    }
+    return;
+  }
+  const nm = e.target.closest(".gold-name");   // 策略表板块名 → 单板块视图
+  if (nm) {
+    pickSector(nm.dataset.n);
+    document.querySelector(".card").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+});
+document.getElementById("polWrap").addEventListener("change", e => {
+  if (!e.target.classList.contains("polChk")) return;
+  const p = policies.find(x => x.id === e.target.closest(".pol").dataset.id);
+  if (!p) return;
+  p.show = e.target.checked;
+  savePolicies();
+  renderPolicies();   // 更新 sigMap（show 集合）
+  render();           // 刷新箭头
 });
 
 /* dataZoom 拖动后重算箭头像素位置；窗口缩放后同样重算 */
 chart.on("datazoom", () => applyGoldArrows());
 window.addEventListener("resize", () => { chart.resize(); applyGoldArrows(); });
 
+loadPolicies();
+refreshGenBtn();
 loadAll().catch(err => {
   document.getElementById("lastUpd").textContent = "数据加载失败：" + err.message;
 });
