@@ -191,18 +191,13 @@
     <div class="rules" id="rulesPanel">
       <div class="rule">
         <input type="checkbox" class="rOn" id="r1On" checked>
+        <span class="rlabel">当日涨幅为负，跌幅逐日缩小连续</span>
         <select id="r1x">
-          <option value="1">1日</option>
-          <option value="3" selected>3日</option>
-          <option value="5">5日</option>
-        </select>
-        <span class="rlabel">跌幅连续扩大</span>
-        <select id="r1y">
           <option value="1" selected>1</option><option value="2">2</option><option value="3">3</option>
           <option value="4">4</option><option value="5">5</option>
         </select>
         <span class="rlabel">天</span>
-        <i class="tip-i">ⓘ<span class="tip">T-1 日（含 T-1）起向前计算：连续 y 天 x日涨幅为负且逐日加深（负得越来越多）。例：y=1 即 T-2、T-1 两天 x日涨幅都为负且 T-1 更负</span></i>
+        <i class="tip-i">ⓘ<span class="tip">T-1日（包含）之前的每日跌幅逐步缩小（当日涨幅为负且逐日收窄），持续 x 天</span></i>
       </div>
       <div class="rule">
         <input type="checkbox" class="rOn" id="r2On" checked>
@@ -407,7 +402,7 @@ function readRules() {
   const g = id => document.getElementById(id);
   const num = (id, dft) => { const v = parseFloat(g(id).value); return isNaN(v) ? dft : v; };
   const rules = {
-    r1: { on: g("r1On").checked, x: parseInt(g("r1x").value, 10), y: parseInt(g("r1y").value, 10) },
+    r1: { on: g("r1On").checked, x: parseInt(g("r1x").value, 10) },
     r2: { on: g("r2On").checked, x: parseInt(g("r2x").value, 10) },
     r3: { on: g("r3On").checked, x: parseInt(g("r3x").value, 10), y: Math.min(500, Math.max(1, num("r3y", 30))) },
     r4: { on: g("r4On").checked, x: parseInt(g("r4x").value, 10), y: Math.max(1, num("r4y", 30)) },
@@ -423,7 +418,7 @@ function refreshGenBtn() {
 
 function ruleDesc(r) {
   const parts = [];
-  if (r.r1.on) parts.push(r.r1.x + "日跌幅连续扩大" + r.r1.y + "天");
+  if (r.r1.on) parts.push("当日跌幅逐日缩小连续" + r.r1.x + "天");
   if (r.r2.on) parts.push("连续" + r.r2.x + "日缩量");
   if (r.r3.on) parts.push((r.r3.x === 1 ? "当日" : "连续" + r.r3.x + "日") + "成交额放量≥" + r.r3.y + "%");
   if (r.r4.on) parts.push(r.r4.x + "日涨幅排名上升≥" + r.r4.y);
@@ -436,13 +431,13 @@ function ruleDesc(r) {
    任一参与值为 null 则该板块该日跳过；全部勾选规则同时满足才命中。 */
 function computeHits(r) {
   // 归一规则结构：兼容早期缓存策略（缺新规则字段时按 off + 默认参数处理）
-  const RD = { r1: { on: false, x: 3, y: 1 }, r2: { on: false, x: 1 }, r3: { on: false, x: 1, y: 30 },
+  const RD = { r1: { on: false, x: 1 }, r2: { on: false, x: 1 }, r3: { on: false, x: 1, y: 30 },
                r4: { on: false, x: 3, y: 30 }, r5: { on: false, x: 3, y: 0 }, r6: { on: false, y: 0 } };
   for (const k in RD) r[k] = Object.assign({}, RD[k], r[k] || {});
   const S = DATA.series, dates = DATA.dates, N = dates.length;
   const names = Object.keys(S.chg);
   let i0 = 0;
-  if (r.r1.on) i0 = Math.max(i0, r.r1.y + 1);
+  if (r.r1.on) i0 = Math.max(i0, r.r1.x + 1);
   if (r.r2.on) i0 = Math.max(i0, r.r2.x + 1);
   if (r.r3.on) i0 = Math.max(i0, r.r3.x);
   if (r.r4.on) i0 = Math.max(i0, 1);
@@ -451,11 +446,11 @@ function computeHits(r) {
     for (const nm of names) {
       const parts = [];
       let ok = true;
-      if (r.r1.on) {   // v[i-1-y..i-1] 递减且首个 <0（递减+首负 ⇒ 全负且负得更多）
-        const v = S[CHG_OF_X[r.r1.x]][nm], k0 = i - 1 - r.r1.y;
-        let bad = v[k0] == null || v[k0] >= 0;
-        for (let k = k0 + 1; !bad && k <= i - 1; k++) if (v[k] == null || v[k] >= v[k - 1]) bad = true;
-        if (bad) { ok = false; } else { parts.push(r.r1.x + "日跌幅连续扩大" + r.r1.y + "天"); }
+      if (r.r1.on) {   // 当日涨幅 v[i-1-x..i-1] 全部为负且逐日收窄（负得越来越少）
+        const v = S.chg[nm], k0 = i - 1 - r.r1.x;
+        let bad = k0 < 0 || v[k0] == null || v[k0] >= 0;
+        for (let k = k0 + 1; !bad && k <= i - 1; k++) if (v[k] == null || v[k] >= 0 || v[k] <= v[k - 1]) bad = true;
+        if (bad) { ok = false; } else { parts.push("跌幅逐日缩小连续" + r.r1.x + "天"); }
       }
       if (ok && r.r2.on) {   // a[i-1-x..i-1] 逐对严格下降
         const a = S.amount[nm], k0 = i - 1 - r.r2.x;
