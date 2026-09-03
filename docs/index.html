@@ -400,9 +400,9 @@ function ruleDesc(r) {
   const parts = [];
   if (r.r1.on) parts.push(r.r1.x + "日跌幅连续扩大" + r.r1.y + "天");
   if (r.r2.on) parts.push("连续" + r.r2.x + "日缩量");
-  if (r.r3.on) parts.push("连续" + r.r3.x + "日成交额放大≥" + r.r3.y + "%");
-  if (r.r4.on) parts.push(r.r4.x + "日涨幅排名提前≥" + r.r4.y + "名");
-  if (r.r5.on) parts.push(r.r5.x + "日主力净流入≥" + r.r5.y + "亿");
+  if (r.r3.on) parts.push((r.r3.x === 1 ? "当日" : "连续" + r.r3.x + "日") + "成交额放量≥" + r.r3.y + "%");
+  if (r.r4.on) parts.push(r.r4.x + "日涨幅排名上升≥" + r.r4.y);
+  if (r.r5.on) parts.push(r.r5.x + "日主力流入≥" + r.r5.y + "亿");
   return parts.join(" · ");
 }
 
@@ -437,16 +437,16 @@ function computeHits(r) {
         const a = S.amount[nm], mul = 1 + r.r3.y / 100;
         let bad = false;
         for (let k = i - r.r3.x + 1; k <= i; k++) if (a[k] == null || a[k - 1] == null || a[k] < a[k - 1] * mul) { bad = true; break; }
-        if (bad) { ok = false; } else { parts.push("成交额放大 " + Math.round((a[i] / a[i - 1] - 1) * 100) + "%"); }
+        if (bad) { ok = false; } else { parts.push("成交额放量 " + Math.round((a[i] / a[i - 1] - 1) * 100) + "%"); }
       }
       if (ok && r.r4.on) {   // 名次提前（1=最高）
         const ra = ranks[CHG_OF_X[r.r4.x]][nm];
         const rp = ra[i - 1], rc = ra[i];
-        if (rp == null || rc == null || rp - rc < r.r4.y) { ok = false; } else { parts.push("排名提前 " + (rp - rc) + "名"); }
+        if (rp == null || rc == null || rp - rc < r.r4.y) { ok = false; } else { parts.push(r.r4.x + "日涨幅排名上升 " + (rp - rc)); }
       }
       if (ok && r.r5.on) {
         const f = S[FLOW_OF_X[r.r5.x]][nm], v = f[i];
-        if (v == null || v < r.r5.y) { ok = false; } else { parts.push("主力净流入 " + v.toFixed(2) + "亿"); }
+        if (v == null || v < r.r5.y) { ok = false; } else { parts.push(r.r5.x + "日主力流入 " + v.toFixed(2) + "亿"); }
       }
       if (ok) hits.push({ name: nm, date: dates[i], txt: parts.join(" ｜ ") });
     }
