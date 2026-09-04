@@ -614,21 +614,11 @@ function allViewOption() {
   const rankArr = ranks[state.tab];
   const selected = {};
   showNames.forEach((n, i) => selected[n] = true);
-  // 图例多行高度估算（plain 自动换行）：按 11px/字 + icon/间距余量逐项排布估行数
-  const chartW = (document.getElementById("chart") || {}).clientWidth || 1200;
-  const availW = chartW - 136 - 66;
-  let glLines = 1, glUsed = 0;
-  for (const n of showNames) {
-    const w = n.length * 11 + 48;
-    if (glUsed + w > availW) { glLines += 1; glUsed = 0; }
-    glUsed += w + 10;
-  }
-  const legendH = glLines * 20 + 12;   // 行高 20 + 冗余，避免多行顶到轴标签
 
   return {
     animation: false,
-    /* 内置图例(plain 自动多行), 高度随估算行数动态留白, 见下方 legendH */
-    grid: { top: 36, left: 136, right: 66, bottom: 66 + legendH },
+    /* 内置图例(plain 自动多行)；渲染后按实际图例高度微调 grid 底部(adjustLegendSpace) */
+    grid: { top: 36, left: 136, right: 66, bottom: 96 },
     legend: {
       type: "plain", bottom: 36, left: 136, right: 66,
       data: showNames, selected,
@@ -834,6 +824,28 @@ function render() {
   chart.setOption(state.mode === "single" ? singleViewOption(state.singleName) : allViewOption(), true);
   renderPolicies();
   applyGoldArrows();
+  if (state.mode === "all") requestAnimationFrame(adjustLegendSpace);
+}
+
+/* 渲染后按图例实际顶边微调主图底部：仅留轴标签高度，避免图例上方大片空白 */
+function adjustLegendSpace() {
+  try {
+    const H = chart.getHeight();
+    let minTop = Infinity;
+    for (const el of chart.getZr().storage.getDisplayList() || []) {
+      if (el.type === "tspan" && el.style && el.style.fill === "#3a3a3c") {   // 图例文字专属色
+        const t = el.transform || [1, 0, 0, 1, 0, 0];
+        const b = el.getBoundingRect();
+        minTop = Math.min(minTop, t[5] + b.y);
+      }
+    }
+    if (minTop === Infinity) return;
+    const cur = (chart.getOption().grid || [])[0].bottom;
+    const need = Math.round(H - minTop + 26);   // 轴标签高 ~14 + 间距 ~12
+    if (Math.abs(need - cur) > 4) {
+      chart.setOption({ grid: [{ ...(chart.getOption().grid || [])[0], bottom: need }] }, false);
+    }
+  } catch (e) { /* 布局测量失败则保持估算 */ }
 }
 
 /* ============ 交互 ============ */
@@ -1005,7 +1017,11 @@ document.addEventListener("click", e => {
 
 /* dataZoom 拖动后重算箭头像素位置；窗口缩放后同样重算 */
 chart.on("datazoom", () => applyGoldArrows());
-window.addEventListener("resize", () => { chart.resize(); applyGoldArrows(); });
+window.addEventListener("resize", () => {
+  chart.resize();
+  applyGoldArrows();
+  if (state.mode === "all") adjustLegendSpace();
+});
 
 loadPolicies();
 refreshGenBtn();
