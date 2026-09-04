@@ -75,13 +75,6 @@
   .badge.show{display:block;line-height:1.6}
 
   #chart{width:100%;height:700px}
-
-  /* 全视图图例: 一行 15 个、多行平铺(HTML 网格, 替代 ECharts 翻页图例) */
-  .gl-legend{display:grid;grid-template-columns:repeat(15,minmax(0,1fr));gap:1px 4px;margin:8px 0 0;font-size:11px;color:var(--ink)}
-  .gl-item{display:flex;align-items:center;gap:5px;padding:3px 5px;border-radius:6px;cursor:pointer;overflow:hidden;white-space:nowrap;line-height:1.25}
-  .gl-item:hover{background:#f0f7ff}
-  .gl-dot{flex:none;width:9px;height:9px;border-radius:2px}
-  .gl-txt{overflow:hidden;text-overflow:ellipsis}
   .hint{font-size:11px;color:var(--sub2);margin-top:8px;text-align:center}
 
   footer{margin-top:26px;text-align:center;font-size:11px;color:var(--sub2);line-height:1.7}
@@ -187,7 +180,6 @@
     <div class="badge" id="flowBadge"></div>
     <div class="badge" id="sectorBadge"></div>
     <div id="chart"></div>
-    <div id="glLegend" class="gl-legend"></div>
     <div class="hint" id="hint">点击下方图例中的板块名，可查看该板块的排名曲线与具体数值；再次点击或点「返回全部板块」回到全视图 · 拖动底部滑块选择时间窗口</div>
   </div>
 
@@ -622,11 +614,27 @@ function allViewOption() {
   const rankArr = ranks[state.tab];
   const selected = {};
   showNames.forEach((n, i) => selected[n] = true);
+  // 图例多行高度估算（plain 自动换行）：按 11px/字 + icon/间距余量逐项排布估行数
+  const chartW = (document.getElementById("chart") || {}).clientWidth || 1200;
+  const availW = chartW - 136 - 66;
+  let glLines = 1, glUsed = 0;
+  for (const n of showNames) {
+    const w = n.length * 11 + 48;
+    if (glUsed + w > availW) { glLines += 1; glUsed = 0; }
+    glUsed += w + 10;
+  }
+  const legendH = glLines * 20 + 12;   // 行高 20 + 冗余，避免多行顶到轴标签
 
   return {
     animation: false,
-    grid: { top: 36, left: 136, right: 66, bottom: 56 },
-    /* 图例改用页面内 HTML 网格(一行15个多行平铺), 见 renderLegend */
+    /* 内置图例(plain 自动多行), 高度随估算行数动态留白, 见下方 legendH */
+    grid: { top: 36, left: 136, right: 66, bottom: 66 + legendH },
+    legend: {
+      type: "plain", bottom: 36, left: 136, right: 66,
+      data: showNames, selected,
+      icon: "roundRect", itemWidth: 14, itemHeight: 3,
+      itemGap: 10, textStyle: { fontSize: 11, color: "#3a3a3c" },
+    },
     tooltip: {
       trigger: "axis",
       confine: true,
@@ -824,23 +832,8 @@ function render() {
     "最后更新 " + DATA.meta.updated_at.slice(5, 16).replace(" ", " ") + " · 交易日 " + DATA.dates[0] + " ~ " + DATA.dates[DATA.dates.length - 1];
 
   chart.setOption(state.mode === "single" ? singleViewOption(state.singleName) : allViewOption(), true);
-  renderLegend();
   renderPolicies();
   applyGoldArrows();
-}
-
-/* 全视图 HTML 图例: 一行 15 个多行平铺; 单板块视图隐藏(图表内小图例保留) */
-function renderLegend() {
-  const box = document.getElementById("glLegend");
-  if (!DATA || !box) return;
-  if (state.mode !== "all") { box.style.display = "none"; return; }
-  box.style.display = "grid";
-  const order = latestOrder(state.tab);
-  const names = state.topn === "all" ? order : order.slice(0, state.topn);
-  box.innerHTML = names.map((n, i) =>
-    "<div class='gl-item' data-n='" + n + "' title='" + n + " · 当前第 " + (i + 1) + " 名'>" +
-    "<span class='gl-dot' style='background:" + palette(i) + "'></span>" +
-    "<span class='gl-txt'>" + n + "</span></div>").join("");
 }
 
 /* ============ 交互 ============ */
@@ -907,12 +900,6 @@ function pickSector(n) {
   sectorBtn.textContent = n + " ▾";
   render();
 }
-
-/* HTML 图例点击：进入该板块单视图（替代 ECharts 图例交互） */
-document.getElementById("glLegend").addEventListener("click", e => {
-  const it = e.target.closest(".gl-item");
-  if (it) pickSector(it.dataset.n);
-});
 
 /* 点击图例：全视图 → 进入该板块单视图；单板块视图 → 再点当前板块回全视图，点其他板块切换 */
 chart.on("legendselectchanged", function (params) {
