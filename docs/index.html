@@ -776,6 +776,7 @@ function paletteOrder(name) {
 
 function render() {
   if (!DATA) return;
+  glHover = null;   // 视图重建后清除图例悬停高亮
   for (const t of ["chg", "chg3", "chg5", "netinflow", "netinflow3", "netinflow5"]) ranks[t] = calcRanks(t);
 
   /* tab 按钮 */
@@ -845,8 +846,56 @@ function adjustLegendSpace() {
     if (Math.abs(need - cur) > 4) {
       chart.setOption({ grid: [{ ...(chart.getOption().grid || [])[0], bottom: need }] }, false);
     }
+    buildGlRects();
   } catch (e) { /* 布局测量失败则保持估算 */ }
 }
+
+/* ---- 全视图图例悬停高亮: 鼠标停某板块图例项时仅该板块曲线可见, 其余透明 ---- */
+let glHover = null;      // 当前悬停图例项(板块名); null=无
+let glRects = [];        // 图例项命中矩形缓存
+
+function buildGlRects() {
+  glRects = [];
+  try {
+    for (const el of chart.getZr().storage.getDisplayList() || []) {
+      if (el.type === "tspan" && el.style && el.style.fill === "#3a3a3c") {
+        const t = el.transform || [1, 0, 0, 1, 0, 0];
+        const b = el.getBoundingRect();
+        glRects.push({
+          name: String(el.style.text || ""),
+          x: t[4] + b.x - 26,      // 图标 + icon/文字间距
+          y: t[5] + b.y - 10,
+          w: b.width + 26 + 12,
+          h: b.height + 20,
+        });
+      }
+    }
+  } catch (e) { /* 忽略测量失败 */ }
+}
+
+function applyGlHover(name) {
+  if (name === glHover) return;
+  glHover = name;
+  const series = (chart.getOption().series || []);
+  chart.setOption({
+    series: series.map(s => ({ lineStyle: { opacity: (name && s.name !== name) ? 0.08 : 1 } })),
+  }, false);
+}
+
+// 绑定 zrender 层: 实测 ECharts 实例 chart.on("mousemove") 不转发, zr 正常
+chart.getZr().on("mousemove", e => {
+  if (state.mode !== "all" || !DATA) return;
+  const ev = e.event || e;
+  const x = e.offsetX != null ? e.offsetX : ev.offsetX;
+  const y = e.offsetY != null ? e.offsetY : ev.offsetY;
+  if (x == null || y == null) return;
+  let hit = null;
+  for (const r of glRects) {
+    if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) { hit = r.name; break; }
+  }
+  applyGlHover(hit);
+});
+chart.getZr().on("globalout", () => applyGlHover(null));
 
 /* ============ 交互 ============ */
 document.getElementById("tabs").addEventListener("click", e => {
