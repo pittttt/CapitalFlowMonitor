@@ -242,7 +242,7 @@
           <option value="1" selected>1</option><option value="2">2</option><option value="3">3</option>
           <option value="4">4</option><option value="5">5</option>
         </select>
-        <span class="rlabel">天每日</span>
+        <span class="rlabel">天</span>
         <select id="r5x">
           <option value="1">1日</option>
           <option value="3" selected>3日</option>
@@ -264,7 +264,7 @@
           <option value="1" selected>1</option><option value="2">2</option><option value="3">3</option>
           <option value="4">4</option><option value="5">5</option>
         </select>
-        <span class="rlabel">天每日</span>
+        <span class="rlabel">天</span>
         <select id="r6x">
           <option value="1" selected>1日</option>
           <option value="3">3日</option>
@@ -447,8 +447,8 @@ function ruleDesc(r) {
   if (r.r2.on) parts.push("连续" + r.r2.x + "日缩量");
   if (r.r3.on) parts.push((r.r3.x === 1 ? "当日" : "连续" + r.r3.x + "日") + "成交额放量≥" + r.r3.y + "%");
   if (r.r4.on) parts.push(r.r4.x + "日涨幅排名上升≥" + r.r4.y);
-  if (r.r5.on) parts.push("连续" + r.r5.n + "天每日" + r.r5.x + "日主力流入" + r.r5.cmp + r.r5.y + "亿");
-  if (r.r6.on) parts.push("连续" + r.r6.n + "天每日" + r.r6.x + "日涨幅" + r.r6.cmp + r.r6.y + "%");
+  if (r.r5.on) parts.push("连续" + r.r5.n + "天" + r.r5.x + "日主力流入" + r.r5.cmp + r.r5.y + "亿");
+  if (r.r6.on) parts.push("连续" + r.r6.n + "天" + r.r6.x + "日涨幅" + r.r6.cmp + r.r6.y + "%");
   return parts.join(" · ");
 }
 
@@ -504,7 +504,7 @@ function computeHits(r) {
           const v = f[i - k];
           if (v == null || (r.r5.cmp === ">=" ? v < r.r5.y : v > r.r5.y)) { bad = true; break; }
         }
-        if (bad) { ok = false; } else { parts.push("连续" + r.r5.n + "天每日" + r.r5.x + "日主力流入" + r.r5.cmp + r.r5.y + "亿"); }
+        if (bad) { ok = false; } else { parts.push("连续" + r.r5.n + "天" + r.r5.x + "日主力流入" + r.r5.cmp + r.r5.y + "亿"); }
       }
       if (ok && r.r6.on) {   // T 起连续 n 天, 每日 x日(累计)涨幅 都满足 cmp y
         const v = S[CHG_OF_X[r.r6.x]][nm];
@@ -513,7 +513,7 @@ function computeHits(r) {
           const c = v[i - k];
           if (c == null || (r.r6.cmp === ">=" ? c < r.r6.y : c > r.r6.y)) { bad = true; break; }
         }
-        if (bad) { ok = false; } else { parts.push("连续" + r.r6.n + "天每日" + r.r6.x + "日涨幅" + r.r6.cmp + r.r6.y + "%"); }
+        if (bad) { ok = false; } else { parts.push("连续" + r.r6.n + "天" + r.r6.x + "日涨幅" + r.r6.cmp + r.r6.y + "%"); }
       }
       if (ok) hits.push({ name: nm, date: dates[i], txt: parts.join(" ｜ ") });
     }
