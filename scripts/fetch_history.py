@@ -276,14 +276,21 @@ def main():
     series_chg5 = {s["name"]: [old_chg5.get(s["name"], {}).get(d) for d in dates] for s in sectors}
 
     if args.refresh_history:
-        # 校正模式：用本次同花顺全量数据重建整个窗口（人工触发，历史错乱时使用）
+        # 校正模式：用本次同花顺全量数据重建整个窗口（人工触发，历史错乱时使用）；
+        # 本次拉取失败的板块（last.js 异常空返回）跳过，保留打底值，避免校正时二次洗白
+        skipped = []
         for s in sectors:
             closes = klines.get(s["code"]) or {}
+            if not closes:
+                skipped.append(s["name"])
+                continue
             chg, chg3, chg5 = compute_kline_series(closes, dates, day_chg.get(s["name"]))
             series_chg[s["name"]] = chg
             series_chg3[s["name"]] = chg3
             series_chg5[s["name"]] = chg5
         print("[refresh-history] 涨幅/3日/5日已全量重算覆盖（同花顺源校正）", flush=True)
+        if skipped:
+            print("[warn] refresh-history 拉取失败的板块保留原值（待 last.js 恢复后重跑）: %s" % "、".join(skipped), flush=True)
     else:
         last_day = dates[-1]
         filled_close = 0
@@ -479,10 +486,16 @@ def main():
     old_amt = {nm: dict(zip(old_dates, arr)) for nm, arr in (old_series.get("amount") or {}).items()}
     series_amount = {s["name"]: [old_amt.get(s["name"], {}).get(d) for d in dates] for s in sectors}
     if args.refresh_history:
+        skipped = []
         for s in sectors:
             amounts = kline_amounts.get(s["code"]) or {}
+            if not amounts:
+                skipped.append(s["name"])
+                continue
             series_amount[s["name"]] = [round(amounts.get(d, 0) / 1e8, 1) if amounts.get(d) else None for d in dates]
         print("[refresh-history] 成交额已全量重算覆盖", flush=True)
+        if skipped:
+            print("[warn] refresh-history 成交额拉取失败的板块保留原值: %s" % "、".join(skipped), flush=True)
     else:
         amt_filled = 0
         for s in sectors:
