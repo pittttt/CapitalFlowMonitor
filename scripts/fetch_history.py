@@ -8,9 +8,12 @@
 
 更新策略：
 - 板块指数/涨跌家数每次全量重拉（各 90 次请求，同花顺 d 域名免 cookie）
+- 历史数据以旧文件为准（按日期打底、窗口滚动），本次只写最新交易日：当日 hyzjl/realhead/
+  last.js 都无值则该板块当日留空，不再覆盖历史——单次抓取异常最多缺当日，不会洗掉历史
+- 历史确已错乱时用 --refresh-history 全量重算覆盖（人工触发）
 - 主力净流入每日抓取累积，17:00 结算校验后写入
 
-用法：python scripts/fetch_history.py [--limit N] [--no-flow] [--full] [--backfill-up]
+用法：python scripts/fetch_history.py [--limit N] [--no-flow] [--full] [--backfill-up] [--refresh-history]
 """
 import argparse
 import datetime as dt
@@ -194,6 +197,7 @@ def main():
     ap.add_argument("--no-flow", action="store_true", help="跳过主力净流入")
     ap.add_argument("--full", action="store_true", help="主力净流入全量重建（拉取窗口内全部交易日）")
     ap.add_argument("--backfill-up", action="store_true", help="上涨家数占比历史全量回补（腾讯K线区间，一次性）")
+    ap.add_argument("--refresh-history", action="store_true", help="涨幅/成交额历史全量重算覆盖（同花顺源校正，人工触发）")
     args = ap.parse_args()
 
     sectors_data = load_json(SECTORS_FILE)
@@ -262,20 +266,61 @@ def main():
         if chg_filled:
             print("当日涨跌幅已用 realhead 补齐 %d 个板块" % chg_filled)
 
-    series_chg = {}
-    series_chg3 = {}
-    series_chg5 = {}
-    for s in sectors:
-        closes = klines.get(s["code"]) or {}
-        chg, chg3, chg5 = compute_kline_series(closes, dates, day_chg.get(s["name"]))
-        series_chg[s["name"]] = chg
-        series_chg3[s["name"]] = chg3
-        series_chg5[s["name"]] = chg5
+    # 历史数据以旧文件为准（按日期打底、窗口滚动），本次只写最新交易日，单次 last.js 异常不再洗掉历史。
+    # 当日 chg 优先级：hyzjl/realhead（day_chg）→ last.js 当日两日收盘推算；都无值则该板块当日留空。
+    old_chg = {nm: dict(zip(old_dates, arr)) for nm, arr in (old_series.get("chg") or {}).items()}
+    old_chg3 = {nm: dict(zip(old_dates, arr)) for nm, arr in (old_series.get("chg3") or {}).items()}
+    old_chg5 = {nm: dict(zip(old_dates, arr)) for nm, arr in (old_series.get("chg5") or {}).items()}
+    series_chg = {s["name"]: [old_chg.get(s["name"], {}).get(d) for d in dates] for s in sectors}
+    series_chg3 = {s["name"]: [old_chg3.get(s["name"], {}).get(d) for d in dates] for s in sectors}
+    series_chg5 = {s["name"]: [old_chg5.get(s["name"], {}).get(d) for d in dates] for s in sectors}
 
-    # 告警：哪些板块缺最新交易日数据（10jqka 单板块 last.js 偶发滞后，次日自动补齐）
+    if args.refresh_history:
+        # 校正模式：用本次同花顺全量数据重建整个窗口（人工触发，历史错乱时使用）
+        for s in sectors:
+            closes = klines.get(s["code"]) or {}
+            chg, chg3, chg5 = compute_kline_series(closes, dates, day_chg.get(s["name"]))
+            series_chg[s["name"]] = chg
+            series_chg3[s["name"]] = chg3
+            series_chg5[s["name"]] = chg5
+        print("[refresh-history] 涨幅/3日/5日已全量重算覆盖（同花顺源校正）", flush=True)
+    else:
+        last_day = dates[-1]
+        filled_close = 0
+        for s in sectors:
+            nm = s["name"]
+            v = (day_chg.get(nm) or {}).get(last_day)
+            if v is None:
+                bydate = klines.get(s["code"]) or {}
+                c = bydate.get(last_day)
+                prev_ds = [d for d in dates if d < last_day and bydate.get(d) is not None]
+                if c is not None and prev_ds:
+                    v = round((c / bydate[prev_ds[-1]] - 1) * 100, 2)
+                    filled_close += 1
+            if v is not None:
+                series_chg[nm][-1] = v
+        if filled_close:
+            print("当日涨幅已用 last.js 收盘推算补齐 %d 个板块" % filled_close)
+        # 当日 chg 刷新后同步重算最新位置的 3日/5日涨幅（其余历史不动，沿用打底值）
+        for nm, arr in series_chg.items():
+            if arr[-1] is None:
+                continue
+            for n, target in ((3, series_chg3), (5, series_chg5)):
+                if len(arr) < n:
+                    continue
+                win = arr[len(arr) - n:]
+                if any(x is None for x in win):
+                    target[nm][-1] = None
+                else:
+                    acc = 1.0
+                    for x in win:
+                        acc *= 1 + x / 100
+                    target[nm][-1] = round((acc - 1) * 100, 2)
+
+    # 告警：哪些板块缺最新交易日数据（当日多源失败，留空待下次运行补齐）
     missing = [s["name"] for s in sectors if series_chg[s["name"]][-1] is None]
     if missing:
-        print("[warn] 以下板块缺少 %s 的涨幅数据: %s" % (dates[-1], "、".join(missing[:10])), flush=True)
+        print("[warn] 以下板块缺少 %s 的涨幅数据（hyzjl/realhead/last.js 均无，当日留空）: %s" % (dates[-1], "、".join(missing)), flush=True)
 
     # ---------- 1b. 板块上涨家数占比 ----------
     # 口径：上涨占比 = 上涨家数 / 成分股总数（同花顺详情页同款分母，up+down 可不等于 total——差为平盘/停牌）
@@ -343,7 +388,7 @@ def main():
         print("当日上涨占比已用同花顺实时覆盖 %d 个板块（%s）" % (filled, dates[-1]))
         if filled < len(sectors):
             missing = [s["name"] for s in sectors if series_up[s["name"]][-1] is None]
-            print("[warn] 仍有 %d 个板块当日上涨占比缺失（realhead 抓取失败），下次运行自动重试: %s" % (len(missing), "、".join(missing[:10])), flush=True)
+            print("[warn] 仍有 %d 个板块当日上涨占比缺失（realhead 抓取失败），下次运行自动重试: %s" % (len(missing), "、".join(missing)), flush=True)
     else:
         print("[warn] 当日上涨占比未覆盖（realhead 抓取失败），历史值保留", flush=True)
 
@@ -430,12 +475,23 @@ def main():
     series_flow5 = {nm: rolling_sum(arr, 5) for nm, arr in series_flow.items()}
 
     # ---------- 2c. 板块每日成交额（亿元，用于单板块视图柱状图） ----------
-    series_amount = {}
-    for s in sectors:
-        amounts = kline_amounts.get(s["code"]) or {}
-        series_amount[s["name"]] = [
-            round(amounts.get(d, 0) / 1e8, 1) if amounts.get(d) else None for d in dates
-        ]
+    # 成交额历史同涨幅：以旧文件打底，本次只写最新交易日（详情页/last.js 均无则当日留空）
+    old_amt = {nm: dict(zip(old_dates, arr)) for nm, arr in (old_series.get("amount") or {}).items()}
+    series_amount = {s["name"]: [old_amt.get(s["name"], {}).get(d) for d in dates] for s in sectors}
+    if args.refresh_history:
+        for s in sectors:
+            amounts = kline_amounts.get(s["code"]) or {}
+            series_amount[s["name"]] = [round(amounts.get(d, 0) / 1e8, 1) if amounts.get(d) else None for d in dates]
+        print("[refresh-history] 成交额已全量重算覆盖", flush=True)
+    else:
+        amt_filled = 0
+        for s in sectors:
+            amt = (kline_amounts.get(s["code"]) or {}).get(dates[-1])
+            if amt:
+                series_amount[s["name"]][-1] = round(amt / 1e8, 1)
+                amt_filled += 1
+        if amt_filled:
+            print("当日成交额已用 last.js 写入 %d 个板块" % amt_filled)
     # 当日成交额优先用板块详情页（q.10jqka.com.cn 当日实时，与 last.js 同源官方口径）；
     # 历史成交额保留 last.js 数据；详情页失败时该板块当日缺失，last.js 更新后重跑/次日自动补齐
     # （不使用腾讯成分股求和兜底——口径有差异，宁可缺失等官方数据）
@@ -444,18 +500,17 @@ def main():
         if not miss_sectors:
             print("当日成交额 %d 板块已齐全（last.js 已更新），跳过详情页抓取" % len(sectors))
         else:
-            print("当日成交额缺失 %d 个板块，详情页补齐（5s/板块节流）..." % len(miss_sectors))
+            print("当日成交额缺失 %d 个板块: %s" % (len(miss_sectors), "、".join(s["name"] for s in miss_sectors)))
+            print("详情页补齐（5s/板块节流）...")
             ths_amount = fetch_ths_sector_amount(miss_sectors)
             if ths_amount:
-                filled = 0
-                for nm in series_amount:
-                    if nm in ths_amount:
-                        series_amount[nm][-1] = ths_amount[nm]
-                        filled += 1
-                print("当日成交额已用详情页覆盖 %d 个板块" % filled)
-                still_missing = [s["name"] for s in sectors if series_amount[s["name"]][-1] is None]
-                if still_missing:
-                    print("[warn] 仍有 %d 个板块当日成交额缺失（详情页抓取失败），last.js 更新后重跑自动补齐" % len(still_missing))
+                ok = [s["name"] for s in miss_sectors if s["name"] in ths_amount]
+                fail = [s["name"] for s in miss_sectors if s["name"] not in ths_amount]
+                for nm in ok:
+                    series_amount[nm][-1] = ths_amount[nm]
+                print("详情页成交额成功补齐 %d 个板块: %s" % (len(ok), "、".join(ok)))
+                if fail:
+                    print("[warn] 详情页成交额失败 %d 个板块（下次运行自动重试）: %s" % (len(fail), "、".join(fail)))
             else:
                 print("[warn] 详情页成交额抓取失败（可能未配置 THS_COOKIE/被限流），当日缺失待 last.js 更新后补齐")
     except Exception as e:  # noqa: BLE001
