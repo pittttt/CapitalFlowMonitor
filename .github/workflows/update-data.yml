@@ -2,10 +2,10 @@ name: Update Data & Deploy
 
 on:
   schedule:
-    # 测试期：北京 17:00~19:55 每 5 分钟触发（GitHub 最短间隔 5 分钟，cron 固定 UTC）
-    # 验证 schedule 注册/触发正常后，再改回 30 分钟窗口
-    - cron: "*/5 9-11 * * *"
-    - cron: "10 0 * * *"   # 北京 08:10 兜底
+    # 主调度 = cron-job.org 每 30 分钟调 workflow_dispatch（准时稳定，见仓库外部配置）
+    # GitHub schedule 高频会被限流成延迟补跑（实测 5 分钟窗口每天只跑 1~2 次且时间漂移），
+    # 故只保留一条低频兜底：cron-job.org 失效时每日补一次
+    - cron: "10 13 * * *"   # UTC 13:10 = 北京 21:10 兜底
   workflow_dispatch:
 
 permissions:
