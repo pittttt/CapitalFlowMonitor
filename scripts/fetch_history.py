@@ -492,8 +492,11 @@ def main():
             if not amounts:
                 skipped.append(s["name"])
                 continue
-            series_amount[s["name"]] = [round(amounts.get(d, 0) / 1e8, 1) if amounts.get(d) else None for d in dates]
-        print("[refresh-history] 成交额已全量重算覆盖", flush=True)
+            # last.js 当日滞后一天，全量重建只针对历史段；当日保留打底（详情页/last.js 当日已有值），防误清
+            rebuilt = [round(amounts.get(d, 0) / 1e8, 1) if amounts.get(d) else None for d in dates]
+            rebuilt[-1] = series_amount[s["name"]][-1]
+            series_amount[s["name"]] = rebuilt
+        print("[refresh-history] 成交额历史已全量重算覆盖（当日保留）", flush=True)
         if skipped:
             print("[warn] refresh-history 成交额拉取失败的板块保留原值: %s" % "、".join(skipped), flush=True)
     else:
