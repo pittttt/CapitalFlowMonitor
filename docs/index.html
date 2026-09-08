@@ -612,7 +612,7 @@ function applyGoldArrows() {
     const axis = ya && ya.axis;
     if (axis && axis.scale) { ext = axis.scale.getExtent(); yBottom = chart.convertToPixel({ yAxisIndex: 1 }, ext[0]); }
   } catch (e) { /* 跳过箭头 */ }
-  const gridBottom = Math.min(yBottom != null ? yBottom : Infinity, chart.getHeight() - 122 - 24);
+  const gridBottom = Math.min(yBottom != null ? yBottom : Infinity, chart.getHeight() - 162 - 24);
   const elems = [];
   for (const dateStr in byDate) {
     const di = DATA.dates.indexOf(dateStr);
@@ -710,6 +710,20 @@ function allViewOption() {
   };
 }
 
+function movingAvg(arr, n) {
+  const out = new Array(arr.length).fill(null);
+  for (let i = n - 1; i < arr.length; i++) {
+    let s = 0, ok = true;
+    for (let k = 0; k < n; k++) {
+      const v = arr[i - k];
+      if (v == null) { ok = false; break; }
+      s += v;
+    }
+    out[i] = ok ? +(s / n).toFixed(2) : null;
+  }
+  return out;
+}
+
 function singleViewOption(name) {
   const series = DATA.series[state.tab];
   const rankArr = ranks[state.tab];
@@ -720,6 +734,12 @@ function singleViewOption(name) {
   const chgArr = DATA.series.chg[name] || [];
   const amtArr = (DATA.series.amount && DATA.series.amount[name]) || [];
   const upArr = (DATA.series.up_pct && DATA.series.up_pct[name]) || [];
+  const MA5_COLOR = "#6e6e73", MA10_COLOR = "#a45de0", BIAS_COLOR = "#ff9f0a";
+  // 成交额 MA5/MA10（含当日最近 5/10 个交易日算术平均，窗口内任一缺失则该点 null）
+  const ma5Arr = movingAvg(amtArr, 5);
+  const ma10Arr = movingAvg(amtArr, 10);
+  // 乖离率(5日) = (当日成交额 − MA5) / MA5 × 100%
+  const biasArr = amtArr.map((v, i) => (v == null || ma5Arr[i] == null) ? null : +((v - ma5Arr[i]) / ma5Arr[i] * 100).toFixed(2));
   // borderRadius 不支持按值回调，拆分正负两个柱形系列（同位置重叠，各设圆角）
   const posArr = values.map(v => (v != null && v >= 0 ? v : null));
   const negArr = values.map(v => (v != null && v < 0 ? v : null));
@@ -727,10 +747,11 @@ function singleViewOption(name) {
   return {
     animation: false,
     grid: [
-      { top: 34, left: 136, right: 66, bottom: 122 },         // 主图（画布上部）
-      { left: 136, right: 66, bottom: 66, height: 48 },       // 成交额小图（主图下方）
+      { top: 34, left: 136, right: 66, bottom: 162 },         // 主图（画布上部）
+      { left: 136, right: 66, bottom: 112, height: 44 },      // 成交额小图（MA5/MA10 叠加）
+      { left: 136, right: 66, bottom: 66, height: 40 },       // 成交额-MA5 乖离率小图（最底，日期标签于此轴）
     ],
-    axisPointer: { link: [{ xAxisIndex: "all" }] },           // 竖线贯穿两图
+    axisPointer: { link: [{ xAxisIndex: "all" }] },           // 竖线贯穿三图
     legend: {
       bottom: 30, left: 136, right: 20,
       data: [name, name + " · " + TAB_LABEL[state.tab], name + " · 成交额"],
@@ -750,6 +771,8 @@ function singleViewOption(name) {
           html += "<br>";
           if (amtArr[di] != null) {
             html += "成交额 <span style='font-family:var(--mono)'>" + amtArr[di].toFixed(0) + "亿</span>";
+            if (ma5Arr[di] != null) html += "　<span style='color:" + MA5_COLOR + ";font-weight:600'>MA5</span> <span style='font-family:var(--mono)'>" + ma5Arr[di].toFixed(1) + "亿</span>";
+            if (ma10Arr[di] != null) html += "　<span style='color:" + MA10_COLOR + ";font-weight:600'>MA10</span> <span style='font-family:var(--mono)'>" + ma10Arr[di].toFixed(1) + "亿</span>";
           }
           if (chgArr[di] != null) {
             html += "　涨跌 <span style='font-family:var(--mono);color:" + (chgArr[di] >= 0 ? "#ff453a" : "#30d158") + "'>" + fmt(chgArr[di]) + "%</span>";
@@ -757,6 +780,10 @@ function singleViewOption(name) {
         }
         if (upArr[di] != null) {
           html += "<br>上涨家数占比 <span style='font-family:var(--mono)'>" + upArr[di].toFixed(0) + "%</span>";
+        }
+        if (biasArr[di] != null) {
+          html += "<br>乖离率(5日) <span style='font-family:var(--mono);color:" + BIAS_COLOR + "'>" +
+            (biasArr[di] >= 0 ? "+" : "") + biasArr[di] + "%</span>";
         }
         const sigs = sigMap[name] && sigMap[name][DATA.dates[di]];
         if (sigs && sigs.length) {
@@ -769,17 +796,19 @@ function singleViewOption(name) {
     },
     xAxis: [
       { type: "category", data: DATA.dates, boundaryGap: true, axisLine: { lineStyle: { color: "#d2d2d7" } }, axisLabel: { show: false } },
-      { type: "category", gridIndex: 1, data: DATA.dates, boundaryGap: true, axisLabel: { fontSize: 10, color: "#86868b" }, axisLine: { lineStyle: { color: "#d2d2d7" } }, axisTick: { show: false } },
+      { type: "category", gridIndex: 1, data: DATA.dates, boundaryGap: true, axisLine: { lineStyle: { color: "#d2d2d7" } }, axisTick: { show: false }, axisLabel: { show: false } },
+      { type: "category", gridIndex: 2, data: DATA.dates, boundaryGap: true, axisLabel: { fontSize: 10, color: "#86868b" }, axisLine: { lineStyle: { color: "#d2d2d7" } }, axisTick: { show: false } },
     ],
     yAxis: [
       { type: "value", inverse: true, min: 1, max: 90, interval: 10, name: "排名", nameLocation: "start", nameTextStyle: { fontSize: 10.5, color: "#86868b" }, axisLabel: { fontSize: 10.5, color: "#86868b" }, splitLine: { lineStyle: { color: "#f0f0f3" } } },
       { type: "value", name: unit, nameTextStyle: { fontSize: 10.5, color: "#86868b" }, axisLabel: { fontSize: 10.5, color: "#86868b" }, splitLine: { show: false } },
       { type: "value", gridIndex: 1, show: false },
+      { type: "value", gridIndex: 2, show: false, splitLine: { show: false } },
     ],
     dataZoom: [
-      // 需同时作用于两个 x 轴（主图 + 成交额小图），否则缩放时成交额图错位
-      { type: "slider", xAxisIndex: [0, 1], bottom: 8, height: 18, left: 136, right: 66, borderColor: "#e6e6ea", backgroundColor: "#f7f7f9", fillerColor: "rgba(0,113,227,.12)", textStyle: { color: "#86868b", fontSize: 10 } },
-      { type: "inside", xAxisIndex: [0, 1] },
+      // 需同时作用于三个 x 轴（主图 + 成交额 + 乖离率），否则缩放时各图错位
+      { type: "slider", xAxisIndex: [0, 1, 2], bottom: 8, height: 18, left: 136, right: 66, borderColor: "#e6e6ea", backgroundColor: "#f7f7f9", fillerColor: "rgba(0,113,227,.12)", textStyle: { color: "#86868b", fontSize: 10 } },
+      { type: "inside", xAxisIndex: [0, 1, 2] },
     ],
     series: [
       { name, type: "line", yAxisIndex: 0, data: rankArr[name], color: "#0071e3", symbol: "none", lineStyle: { width: 2.2, color: "#0071e3" }, z: 3 },
@@ -800,6 +829,19 @@ function singleViewOption(name) {
         barMaxWidth: 16, color: "#8e8e93",
         itemStyle: { color: p => chgArr[p.dataIndex] >= 0 ? "#ff3b30" : "#34c759", opacity: 0.6, borderRadius: [2, 2, 0, 0] },
         z: 2,
+      },
+      {
+        name: "MA5", type: "line", xAxisIndex: 1, yAxisIndex: 2, data: ma5Arr,
+        symbol: "none", color: MA5_COLOR, lineStyle: { width: 1.2, color: MA5_COLOR }, z: 4,
+      },
+      {
+        name: "MA10", type: "line", xAxisIndex: 1, yAxisIndex: 2, data: ma10Arr,
+        symbol: "none", color: MA10_COLOR, lineStyle: { width: 1.2, color: MA10_COLOR }, z: 4,
+      },
+      {
+        name: "乖离率(5日)", type: "line", xAxisIndex: 2, yAxisIndex: 3, data: biasArr,
+        symbol: "none", color: BIAS_COLOR, lineStyle: { width: 1.4, color: BIAS_COLOR }, z: 2,
+        markLine: { symbol: "none", silent: true, lineStyle: { color: "#d6d6dc", type: "dashed", width: 1 }, data: [{ yAxis: 0 }] },
       },
     ],
   };
