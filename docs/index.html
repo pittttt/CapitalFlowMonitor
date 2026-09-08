@@ -782,7 +782,7 @@ function singleViewOption(name) {
           html += "<br>上涨家数占比 <span style='font-family:var(--mono)'>" + upArr[di].toFixed(0) + "%</span>";
         }
         if (biasArr[di] != null) {
-          html += "<br>乖离率(5日) <span style='font-family:var(--mono);color:" + BIAS_COLOR + "'>" +
+          html += "<br>成交额乖离率(5日) <span style='font-family:var(--mono);color:" + BIAS_COLOR + "'>" +
             (biasArr[di] >= 0 ? "+" : "") + biasArr[di] + "%</span>";
         }
         const sigs = sigMap[name] && sigMap[name][DATA.dates[di]];
@@ -839,7 +839,7 @@ function singleViewOption(name) {
         symbol: "none", color: MA10_COLOR, lineStyle: { width: 1.2, color: MA10_COLOR }, z: 4,
       },
       {
-        name: "乖离率(5日)", type: "line", xAxisIndex: 2, yAxisIndex: 3, data: biasArr,
+        name: "成交额乖离率(5日)", type: "line", xAxisIndex: 2, yAxisIndex: 3, data: biasArr,
         symbol: "none", color: BIAS_COLOR, lineStyle: { width: 1.4, color: BIAS_COLOR }, z: 2,
         markLine: { symbol: "none", silent: true, lineStyle: { color: "#d6d6dc", type: "dashed", width: 1 }, data: [{ yAxis: 0 }] },
       },
